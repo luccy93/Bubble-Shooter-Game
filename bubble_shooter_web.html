@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Arcade Bubble Shooter — Full Single File Game</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Phaser 3 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            background: #0f0c20;
+            font-family: 'Outfit', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(111, 76, 255, 0.3);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+        }
+        /* UI Overlay Elements */
+        .hud-panel {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .hud-badge {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-family: 'Fredoka One', cursive;
+            font-size: 16px;
+            color: #ffeb3b;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .powerup-bar {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+        .btn-powerup {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 24px;
+            font-weight: 800;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-powerup:hover { transform: translateY(-2px) scale(1.05); filter: brightness(1.2); }
+        .btn-powerup:active { transform: translateY(1px); }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 12, 32, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-box {
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 32px;
+            text-align: center;
+            max-width: 340px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        }
+        .modal-title { font-family: 'Fredoka One', cursive; font-size: 32px; margin-bottom: 12px; }
+        .win { color: #4caf50; }
+        .lose { color: #ff5252; }
+        .modal-desc { margin-bottom: 24px; color: #d1c4e9; font-size: 15px; }
+        .btn-modal {
+            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+            border: none;
+            color: white;
+            padding: 14px 28px;
+            border-radius: 30px;
+            font-family: 'Fredoka One', cursive;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(255, 87, 34, 0.4);
+            margin: 6px;
+        }
+        .btn-modal:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- HUD -->
+        <div class="hud-panel">
+            <div class="hud-badge">⭐ <span id="score-text">0</span></div>
+            <div class="hud-badge">🎯 LEVEL 1</div>
+            <div class="hud-badge">💣 MOVES: <span id="moves-text">20</span></div>
+        </div>
+
+        <!-- Power-up Dock -->
+        <div class="powerup-bar">
+            <button class="btn-powerup" onclick="activatePowerup('bomb')">💣 Bomb</button>
+            <button class="btn-powerup" onclick="activatePowerup('rainbow')">🌈 Wildcard</button>
+            <button class="btn-powerup" onclick="activatePowerup('laser')">⚡ Super Laser</button>
+        </div>
+
+        <!-- Modal -->
+        <div id="game-modal" class="modal-overlay">
+            <div class="modal-box">
+                <div id="modal-title" class="modal-title win">STAGE CLEAR!</div>
+                <div id="modal-desc" class="modal-desc">Score: 12,500</div>
+                <button class="btn-modal" onclick="restartGame()">PLAY AGAIN</button>
+                <button id="btn-ad" class="btn-modal" style="background: #9c27b0; display: none;" onclick="watchRewardedAd()">📺 +5 EXTRA MOVES</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. CORE HEXAGONAL GRID ENGINE (PURE JS)
+        // =========================================================================
+        class BubbleGridEngine {
+            constructor(rows = 12, cols = 8, bubbleRadius = 24) {
+                this.rows = rows;
+                this.cols = cols;
+                this.bubbleRadius = bubbleRadius;
+                this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+
+                this.EVEN_ROW_NEIGHBORS = [
+                    { r: -1, c: -1 }, { r: -1, c: 0 },
+                    { r: 0,  c: -1 }, { r: 0,  c: 1 },
+                    { r: 1,  c: -1 }, { r: 1,  c: 0 }
+                ];
+                this.ODD_ROW_NEIGHBORS = [
+                    { r: -1, c: 0 }, { r: -1, c: 1 },
+                    { r: 0,  c: -1 }, { r: 0,  c: 1 },
+                    { r: 1,  c: 0 }, { r: 1,  c: 1 }
+                ];
+            }
+
+            getPixelCoords(row, col, startX = 0, startY = 60) {
+                const diameter = this.bubbleRadius * 2;
+                const rowHeight = this.bubbleRadius * Math.sqrt(3);
+                const xOffset = (row % 2 !== 0) ? this.bubbleRadius : 0;
+                return {
+                    x: startX + col * diameter + this.bubbleRadius + xOffset,
+                    y: startY + row * rowHeight + this.bubbleRadius
+                };
+            }
+
+            getGridCoords(x, y, startX = 0, startY = 60) {
+                const rowHeight = this.bubbleRadius * Math.sqrt(3);
+                const row = Math.floor((y - startY) / rowHeight);
+                const xOffset = (row % 2 !== 0) ? this.bubbleRadius : 0;
+                const col = Math.floor((x - startX - xOffset) / (this.bubbleRadius * 2));
+                return {
+                    row: Math.max(0, Math.min(row, this.rows - 1)),
+                    col: Math.max(0, Math.min(col, this.cols - 1))
+                };
+            }
+
+            getNeighbors(row, col) {
+                const neighbors = [];
+                const offsets = (row % 2 === 0) ? this.EVEN_ROW_NEIGHBORS : this.ODD_ROW_NEIGHBORS;
+                for (const off of offsets) {
+                    const nr = row + off.r, nc = col + off.c;
+                    if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols) {
+                        neighbors.push({ row: nr, col: nc });
+                    }
+                }
+                return neighbors;
+            }
+
+            findMatchingCluster(startRow, startCol) {
+                const startBubble = this.grid[startRow][startCol];
+                if (!startBubble) return [];
+
+                const targetType = startBubble.colorType;
+                const queue = [{ row: startRow, col: startCol }];
+                const visited = Array.from({ length: this.rows }, () => Array(this.cols).fill(false));
+                const matched = [];
+                visited[startRow][startCol] = true;
+
+                while (queue.length > 0) {
+                    const curr = queue.shift();
+                    const bubble = this.grid[curr.row][curr.col];
+                    if (bubble && (bubble.colorType === targetType || bubble.colorType === 'rainbow' || targetType === 'rainbow')) {
+                        matched.push(bubble);
+                        for (const n of this.getNeighbors(curr.row, curr.col)) {
+                            if (!visited[n.row][n.col]) {
+                                visited[n.row][n.col] = true;
+                                const nb = this.grid[n.row][n.col];
+                                if (nb && (nb.colorType === targetType || nb.colorType === 'rainbow' || targetType === 'rainbow')) {
+                                    queue.push(n);
+                                }
+                            }
+                        }
+                    }
+                }
+                return matched.length >= 3 || targetType === 'rainbow' ? matched : [];
+            }
+
+            findFloatingClusters() {
+                const visited = Array.from({ length: this.rows }, () => Array(this.cols).fill(false));
+                const queue = [];
+
+                for (let c = 0; c < this.cols; c++) {
+                    if (this.grid[0][c] !== null) {
+                        visited[0][c] = true;
+                        queue.push({ row: 0, col: c });
+                    }
+                }
+
+                while (queue.length > 0) {
+                    const curr = queue.shift();
+                    for (const n of this.getNeighbors(curr.row, curr.col)) {
+                        if (!visited[n.row][n.col] && this.grid[n.row][n.col] !== null) {
+                            visited[n.row][n.col] = true;
+                            queue.push(n);
+                        }
+                    }
+                }
+
+                const floating = [];
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        const b = this.grid[r][c];
+                        if (b !== null && !visited[r][c]) {
+                            floating.push(b);
+                        }
+                    }
+                }
+                return floating;
+            }
+        }
+
+        // =========================================================================
+        // 2. PHASER 3 GAME SCENE
+        // =========================================================================
+        const COLORS = [0xff3b30, 0x007aff, 0x34c759, 0xffcc00, 0xaf52de];
+        const COLOR_KEYS = ['red', 'blue', 'green', 'yellow', 'purple'];
+
+        let gameInstance, mainScene;
+        let score = 0, moves = 20;
+        let activePowerup = null;
+
+        class BubbleScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'BubbleScene' });
+            }
+
+            create() {
+                mainScene = this;
+                this.gridEngine = new BubbleGridEngine(12, 8, 24);
+                this.leftWallX = 10;
+                this.rightWallX = 390;
+                this.isFiring = false;
+
+                // Groups
+                this.gridGroup = this.physics.add.staticGroup();
+
+                // Trajectory Graphics
+                this.trajectoryGraphics = this.add.graphics();
+
+                // Cannon & Projectile Ready Position
+                this.cannonPos = new Phaser.Math.Vector2(200, 540);
+                this.createLauncher();
+                this.initLevelGrid();
+                this.prepareNextBubble();
+
+                // Pointer Input
+                this.input.on('pointermove', (pointer) => this.updateAim(pointer));
+                this.input.on('pointerdown', (pointer) => this.fireBubble(pointer));
+            }
+
+            createLauncher() {
+                // Cannon Base
+                const base = this.add.circle(this.cannonPos.x, this.cannonPos.y, 35, 0x2c2c2e);
+                base.setStrokeStyle(3, 0xffffff, 0.3);
+
+                // Cannon Barrel
+                this.barrel = this.add.rectangle(this.cannonPos.x, this.cannonPos.y, 14, 50, 0x6e4cff);
+                this.barrel.setOrigin(0.5, 0.8);
+
+                // Preview Next Bubble Slot
+                this.nextBubbleSprite = this.add.circle(100, 550, 18, 0xffffff);
+            }
+
+            initLevelGrid() {
+                // Populate top 5 rows with random colors
+                for (let r = 0; r < 5; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (r % 2 !== 0 && c === 7) continue; // Offset row has 7 cols
+                        const colorIdx = Phaser.Math.Between(0, COLORS.length - 1);
+                        this.createGridBubble(r, c, COLOR_KEYS[colorIdx], COLORS[colorIdx]);
+                    }
+                }
+            }
+
+            createGridBubble(row, col, colorKey, colorHex) {
+                const pos = this.gridEngine.getPixelCoords(row, col);
+                const bubble = this.add.circle(pos.x, pos.y, 22, colorHex);
+                bubble.setStrokeStyle(2, 0xffffff, 0.4);
+
+                const data = { id: `b_${row}_${col}`, row, col, colorType: colorKey, sprite: bubble };
+                this.gridEngine.grid[row][col] = data;
+                this.gridGroup.add(bubble);
+                return data;
+            }
+
+            prepareNextBubble() {
+                if (this.currentBubbleSprite) return;
+
+                const colorIdx = Phaser.Math.Between(0, COLORS.length - 1);
+                this.nextColorKey = COLOR_KEYS[colorIdx];
+                this.nextColorHex = COLORS[colorIdx];
+
+                this.currentBubbleSprite = this.add.circle(this.cannonPos.x, this.cannonPos.y - 20, 22, this.nextColorHex);
+                this.currentBubbleSprite.setStrokeStyle(2, 0xffffff, 0.8);
+                this.physics.add.existing(this.currentBubbleSprite);
+                this.currentBubbleSprite.colorType = this.nextColorKey;
+            }
+
+            updateAim(pointer) {
+                if (this.isFiring) return;
+
+                const dir = new Phaser.Math.Vector2(pointer.x - this.cannonPos.x, pointer.y - (this.cannonPos.y - 20));
+                let angle = dir.angle();
+
+                // Clamp launcher angle
+                if (angle > 0) angle = angle > Math.PI / 2 ? -Math.PI + 0.26 : -0.26;
+                else angle = Phaser.Math.Clamp(angle, -Math.PI + 0.26, -0.26);
+
+                this.aimAngle = angle;
+                this.barrel.rotation = angle + Math.PI / 2;
+
+                this.drawTrajectory();
+            }
+
+            drawTrajectory() {
+                this.trajectoryGraphics.clear();
+                this.trajectoryGraphics.lineStyle(3, activePowerup === 'laser' ? 0x00ffff : 0xffffff, 0.8);
+
+                let currentPos = new Phaser.Math.Vector2(this.cannonPos.x, this.cannonPos.y - 20);
+                let currentDir = new Phaser.Math.Vector2(Math.cos(this.aimAngle), Math.sin(this.aimAngle));
+                let bounces = 0;
+                let maxBounces = activePowerup === 'laser' ? 5 : 2;
+
+                while (bounces <= maxBounces) {
+                    let targetX = currentDir.x > 0 ? this.rightWallX : this.leftWallX;
+                    let distToWall = (targetX - currentPos.x) / currentDir.x;
+                    let hitY = currentPos.y + currentDir.y * distToWall;
+
+                    if (hitY < 60) {
+                        let distToCeiling = (60 - currentPos.y) / currentDir.y;
+                        let endX = currentPos.x + currentDir.x * distToCeiling;
+                        this.drawDottedLine(currentPos, new Phaser.Math.Vector2(endX, 60));
+                        break;
+                    } else {
+                        let wallHitPos = new Phaser.Math.Vector2(targetX, hitY);
+                        this.drawDottedLine(currentPos, wallHitPos);
+                        currentPos = wallHitPos;
+                        currentDir.x *= -1;
+                        bounces++;
+                    }
+                }
+            }
+
+            drawDottedLine(p1, p2) {
+                const dist = Phaser.Math.Distance.BetweenPoints(p1, p2);
+                const dots = Math.floor(dist / 14);
+                for (let i = 0; i < dots; i++) {
+                    const t = i / dots;
+                    const x = Phaser.Math.Interpolation.Linear([p1.x, p2.x], t);
+                    const y = Phaser.Math.Interpolation.Linear([p1.y, p2.y], t);
+                    this.trajectoryGraphics.fillCircle(x, y, 3);
+                }
+            }
+
+            fireBubble(pointer) {
+                if (this.isFiring || !this.currentBubbleSprite) return;
+                this.isFiring = true;
+                this.trajectoryGraphics.clear();
+
+                // Check active power-ups
+                if (activePowerup === 'bomb') {
+                    this.currentBubbleSprite.colorType = 'bomb';
+                    this.currentBubbleSprite.setFillStyle(0xff9800);
+                } else if (activePowerup === 'rainbow') {
+                    this.currentBubbleSprite.colorType = 'rainbow';
+                    this.currentBubbleSprite.setFillStyle(0xffffff);
+                }
+                activePowerup = null;
+
+                moves--;
+                document.getElementById('moves-text').innerText = moves;
+
+                const speed = 900;
+                const vx = Math.cos(this.aimAngle) * speed;
+                const vy = Math.sin(this.aimAngle) * speed;
+
+                this.currentBubbleSprite.body.setVelocity(vx, vy);
+                this.currentBubbleSprite.body.setCollideWorldBounds(true);
+                this.currentBubbleSprite.body.setBounce(1, 0);
+
+                // Collision check against grid
+                this.gridCollider = this.physics.add.overlap(
+                    this.currentBubbleSprite,
+                    this.gridGroup,
+                    this.onBubbleCollision,
+                    null,
+                    this
+                );
+            }
+
+            update() {
+                // Ceiling collision manually
+                if (this.currentBubbleSprite && this.isFiring) {
+                    if (this.currentBubbleSprite.y <= 84) {
+                        this.onBubbleCollision(this.currentBubbleSprite, null);
+                    }
+                }
+            }
+
+            onBubbleCollision(projectile, hitTarget) {
+                if (!this.isFiring) return;
+                this.isFiring = false;
+                projectile.body.stop();
+                if (this.gridCollider) this.physics.world.removeCollider(this.gridCollider);
+
+                const gridCoord = this.gridEngine.getGridCoords(projectile.x, projectile.y);
+                const targetPixel = this.gridEngine.getPixelCoords(gridCoord.row, gridCoord.col);
+
+                projectile.x = targetPixel.x;
+                projectile.y = targetPixel.y;
+
+                // Add to engine grid state
+                const newBubble = {
+                    id: `b_${gridCoord.row}_${gridCoord.col}`,
+                    row: gridCoord.row,
+                    col: gridCoord.col,
+                    colorType: projectile.colorType,
+                    sprite: projectile
+                };
+                this.gridEngine.grid[gridCoord.row][gridCoord.col] = newBubble;
+                this.gridGroup.add(projectile);
+                this.currentBubbleSprite = null;
+
+                // Handle Powerups & Matching
+                if (newBubble.colorType === 'bomb') {
+                    this.triggerBombExplosion(gridCoord.row, gridCoord.col);
+                } else {
+                    this.processMatches(gridCoord.row, gridCoord.col);
+                }
+
+                // Check Win/Loss
+                this.checkGameEnd();
+
+                // Prepare next shot
+                this.time.delayedCall(200, () => this.prepareNextBubble());
+            }
+
+            triggerBombExplosion(row, col) {
+                const affected = [];
+                for (let r = row - 1; r <= row + 1; r++) {
+                    for (let c = col - 1; c <= col + 1; c++) {
+                        if (r >= 0 && r < this.gridEngine.rows && c >= 0 && c < this.gridEngine.cols) {
+                            if (this.gridEngine.grid[r][c]) {
+                                affected.push(this.gridEngine.grid[r][c]);
+                            }
+                        }
+                    }
+                }
+                this.popBubbles(affected);
+            }
+
+            processMatches(row, col) {
+                const matched = this.gridEngine.findMatchingCluster(row, col);
+                if (matched.length >= 3) {
+                    this.popBubbles(matched);
+
+                    // Check for detached floating clusters
+                    const floating = this.gridEngine.findFloatingClusters();
+                    if (floating.length > 0) {
+                        this.dropBubbles(floating);
+                    }
+                }
+            }
+
+            popBubbles(bubbles) {
+                score += bubbles.length * 100;
+                document.getElementById('score-text').innerText = score;
+
+                bubbles.forEach(b => {
+                    this.gridEngine.grid[b.row][b.col] = null;
+                    if (b.sprite) {
+                        this.tweens.add({
+                            targets: b.sprite,
+                            scale: 1.4,
+                            alpha: 0,
+                            duration: 180,
+                            onComplete: () => b.sprite.destroy()
+                        });
+                    }
+                });
+            }
+
+            dropBubbles(bubbles) {
+                score += bubbles.length * 200;
+                document.getElementById('score-text').innerText = score;
+
+                bubbles.forEach(b => {
+                    this.gridEngine.grid[b.row][b.col] = null;
+                    if (b.sprite) {
+                        this.tweens.add({
+                            targets: b.sprite,
+                            y: b.sprite.y + 300,
+                            alpha: 0,
+                            duration: 400,
+                            ease: 'Power2',
+                            onComplete: () => b.sprite.destroy()
+                        });
+                    }
+                });
+            }
+
+            checkGameEnd() {
+                // Win Check: all bubbles cleared
+                let remaining = 0;
+                for (let r = 0; r < this.gridEngine.rows; r++) {
+                    for (let c = 0; c < this.gridEngine.cols; c++) {
+                        if (this.gridEngine.grid[r][c]) remaining++;
+                    }
+                }
+
+                if (remaining === 0) {
+                    showModal(true, `Stage Cleared! Final Score: ${score}`);
+                } else if (moves <= 0) {
+                    showModal(false, `Out of Moves! Final Score: ${score}`);
+                }
+            }
+        }
+
+        // =========================================================================
+        // 3. UI HANDLERS & INITIALIZATION
+        // =========================================================================
+        const config = {
+            type: Phaser.AUTO,
+            width: 400,
+            height: 600,
+            parent: 'game-container',
+            backgroundColor: '#191530',
+            physics: {
+                default: 'arcade',
+                arcade: { debug: false }
+            },
+            scene: [BubbleScene]
+        };
+
+        window.onload = () => {
+            gameInstance = new Phaser.Game(config);
+        };
+
+        function activatePowerup(type) {
+            activePowerup = type;
+            alert(`Activated Powerup: ${type.toUpperCase()}`);
+        }
+
+        function showModal(isWin, msg) {
+            const modal = document.getElementById('game-modal');
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-desc');
+            const btnAd = document.getElementById('btn-ad');
+
+            title.innerText = isWin ? "VICTORY!" : "GAME OVER";
+            title.className = isWin ? "modal-title win" : "modal-title lose";
+            desc.innerText = msg;
+            btnAd.style.display = isWin ? "none" : "inline-block";
+
+            modal.classList.add('active');
+        }
+
+        function restartGame() {
+            document.getElementById('game-modal').classList.remove('active');
+            score = 0;
+            moves = 20;
+            document.getElementById('score-text').innerText = score;
+            document.getElementById('moves-text').innerText = moves;
+            if (mainScene) mainScene.scene.restart();
+        }
+
+        function watchRewardedAd() {
+            alert("📺 Watching Rewarded Ad... (+5 Moves Granted!)");
+            moves += 5;
+            document.getElementById('moves-text').innerText = moves;
+            document.getElementById('game-modal').classList.remove('active');
+        }
+    </script>
+</body>
+</html>
