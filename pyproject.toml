@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-bubble-shooter"
+version = "2.0.0"
+description = "Premium Bubble Shooter mobile game built with Pygame-CE"
+readme = "README.md"
+authors = [{ name = "Devendraprasad" }]
+requires-python = ">=3.7"
+dependencies = [
+    "pygame-ce>=2.5.0",
+]
+
+[project.gui-scripts]
+bubble-shooter = "main:main"
