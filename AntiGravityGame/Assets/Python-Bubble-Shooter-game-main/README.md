@@ -140,7 +140,7 @@ pip install pygame
 
 ##  Configuration
 
-The game has no external config file. All tunable constants live at the top of `bubbleshooter.py`:
+The game has no external config file. All tunable constants live at the top of `antigravity_bubbles.py`:
 
 | Constant | Default | Description |
 |----------|---------|-------------|
@@ -153,7 +153,7 @@ The game has no external config file. All tunable constants live at the top of `
 | `aryhgt` | `20` | Grid rows |
 | `clrlist` | 14 colours | Full palette of possible bubble colours |
 
-To change any of these, open `bubbleshooter.py` in your editor and modify the values near the top of the file.
+To change any of these, open `antigravity_bubbles.py` in your editor and modify the values near the top of the file.
 
 ---
 
@@ -162,7 +162,7 @@ To change any of these, open `bubbleshooter.py` in your editor and modify the va
 Make sure you are in the project directory and your virtual environment (if used) is active, then run:
 
 ```bash
-python bubbleshooter.py
+python antigravity_bubbles.py
 ```
 
 The game window (940 × 740 px) will open immediately and background music will begin playing.
@@ -174,7 +174,7 @@ The game window (940 × 740 px) will open immediately and background music will 
 ```
 Python-Bubble-Shooter-game/
 │
-├── bubbleshooter.py          # Main game file — all logic, classes, and entry point
+├── antigravity_bubbles.py    # Main game file — all logic, classes, and entry point
 │
 ├── Arrow.png                 # Launcher arrow sprite image
 ├── bubbleshoot.gif           # Gameplay demo GIF (used in README)
@@ -188,7 +188,7 @@ Python-Bubble-Shooter-game/
 └── README.md                 # Project documentation
 ```
 
-All assets (images, audio) must remain in the **same directory** as `bubbleshooter.py` — the game loads them by relative filename.
+All assets (images, audio) must remain in the **same directory** as `antigravity_bubbles.py` — the game loads them by relative filename.
 
 ---
 
@@ -288,7 +288,7 @@ This is a **desktop application** — distribution options include:
 
 ### Option 1 — Share source (simplest)
 
-Recipients clone the repo and run `python bubbleshooter.py` after installing Pygame.
+Recipients clone the repo and run `python antigravity_bubbles.py` after installing Pygame.
 
 ### Option 2 — Package as a standalone executable with PyInstaller
 
@@ -304,10 +304,10 @@ pyinstaller --onefile --windowed \
   --add-data "Goofy_Theme.ogg:." \
   --add-data "Whatever_It _Takes_OGG.ogg:." \
   --add-data "popcork.ogg:." \
-  bubbleshooter.py
+  antigravity_bubbles.py
 ```
 
-The output executable will be in `dist/bubbleshooter` (Linux/macOS) or `dist/bubbleshooter.exe` (Windows). No Python or Pygame installation required on the target machine.
+The output executable will be in `dist/antigravity_bubbles` (Linux/macOS) or `dist/antigravity_bubbles.exe` (Windows). No Python or Pygame installation required on the target machine.
 
 ### Option 3 — Package with cx_Freeze or Nuitka
 
@@ -328,7 +328,7 @@ As a local desktop game with no networking, server, or user-data storage, the se
 
 ## 📊 Monitoring and Logging
 
-The game does not implement logging by default. To add basic diagnostics during development, insert standard Python logging at the top of `bubbleshooter.py`:
+The game does not implement logging by default. To add basic diagnostics during development, insert standard Python logging at the top of `antigravity_bubbles.py`:
 
 ```python
 import logging
