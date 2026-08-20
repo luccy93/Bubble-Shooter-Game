@@ -38,6 +38,21 @@ class SceneManager:
             elif name == "Statistics":
                 from game.scenes.statistics import StatisticsScene
                 self.current_scene = StatisticsScene(self, **kwargs)
+            elif name == "Splash":
+                from game.scenes.splash import SplashScene
+                self.current_scene = SplashScene(self, **kwargs)
+            elif name == "Welcome":
+                from game.scenes.welcome import WelcomeScene
+                self.current_scene = WelcomeScene(self, **kwargs)
+            elif name == "SignIn":
+                from game.scenes.auth_screens import SignInScene
+                self.current_scene = SignInScene(self, **kwargs)
+            elif name == "SignUp":
+                from game.scenes.auth_screens import SignUpScene
+                self.current_scene = SignUpScene(self, **kwargs)
+            elif name == "Profile":
+                from game.scenes.profile import ProfileScene
+                self.current_scene = ProfileScene(self, **kwargs)
 
     def handle_event(self, event):
         if self.current_scene:

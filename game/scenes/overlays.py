@@ -69,7 +69,8 @@ class VictoryOverlay:
         elif self.replay_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 440):
             self.scene.restart_level()
         elif self.select_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 500):
-            self.scene.manager.change_scene("LevelSelect")
+            next_lvl = min(self.level_id + 1, 15)
+            self.scene.manager.change_scene("LevelSelect", newly_unlocked=next_lvl)
         return True
 
     def draw(self, surface):

@@ -39,9 +39,9 @@ def main():
     SaveManager.load_game()
     AudioManager.init()
 
-    # 5. Initialize Scene Manager and load MainMenu
+    # 5. Initialize Scene Manager and load Splash
     scene_manager = SceneManager()
-    scene_manager.change_scene("MainMenu")
+    scene_manager.change_scene("Splash")
 
     # 6. Central Game Loop
     clock = pygame.time.Clock()

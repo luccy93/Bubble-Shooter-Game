@@ -22,7 +22,7 @@ class MainMenuScene(BaseScene):
         self.settings_btn = Button("⚙️ SETTINGS", w=200, h=44, font_size=15)
         self.how_to_btn = Button("❓ HOW TO PLAY", w=200, h=44, font_size=15)
         self.achieve_btn = Button("🏆 ACHIEVEMENTS", w=200, h=44, font_size=15)
-        self.stats_btn = Button("📊 STATISTICS", w=200, h=44, font_size=15)
+        self.profile_btn = Button("👤 PROFILE", w=200, h=44, font_size=15)
 
         # Ambient floating bubbles background
         self.ambient_bubbles = []
@@ -56,8 +56,8 @@ class MainMenuScene(BaseScene):
             self.manager.change_scene("HowToPlay")
         elif self.achieve_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 560):
             self.manager.change_scene("Achievements")
-        elif self.stats_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 620):
-            self.manager.change_scene("Statistics")
+        elif self.profile_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 620):
+            self.manager.change_scene("Profile")
 
     def update(self, dt):
         # Gentle floating background animation
@@ -95,7 +95,7 @@ class MainMenuScene(BaseScene):
         self.settings_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 440)
         self.how_to_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 500)
         self.achieve_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 560)
-        self.stats_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 620)
+        self.profile_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 620)
         
         # High Score watermark at bottom
         _, high_score, _ = SaveManager.get_progress()

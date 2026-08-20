@@ -53,7 +53,7 @@ class Button:
         # Micro-interactions states
         self.is_pressed = False
         self.press_scale = 1.0
-        self.press_time = 0.0
+        self.target_scale = 1.0
 
         # Label object
         self.label = Label(label_text, size=font_size, color=text_color, title=True)
@@ -77,25 +77,28 @@ class Button:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if touch_rect.collidepoint(vmx, vmy):
                 self.is_pressed = True
-                self.press_scale = 0.93
+                self.target_scale = 0.90
                 return False
 
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             if self.is_pressed:
                 self.is_pressed = False
-                self.press_scale = 1.0
+                self.target_scale = 1.0
                 if touch_rect.collidepoint(vmx, vmy):
                     return True
 
         elif event.type == pygame.MOUSEMOTION:
             if self.is_pressed and not touch_rect.collidepoint(vmx, vmy):
                 self.is_pressed = False
-                self.press_scale = 1.0
+                self.target_scale = 1.0
 
         return False
 
     def draw(self, surface, vx, vy):
         """Draws a premium rounded card button with active press tweens and soft shadows."""
+        # Interpolate press scale towards target scale for smooth spring animation
+        self.press_scale += (self.target_scale - self.press_scale) * 0.25
+
         # Calculate scaled dimensions
         sw = int(self.vw * self.press_scale * GameConfig.scale_x)
         sh = int(self.vh * self.press_scale * GameConfig.scale_y)
@@ -114,5 +117,99 @@ class Button:
         # 3. Inner border highlight
         pygame.draw.rect(surface, (255, 255, 255), btn_rect, width=1, border_radius=sw // 6)
 
-        # 4. Text
+        # 4. Text (Draw text relative to target bounds)
         self.label.draw(surface, vx, vy, originX=0.5, originY=0.5)
+
+
+class InputField:
+    def __init__(self, placeholder, w=240, h=40, is_password=False):
+        self.placeholder = placeholder
+        self.vw = w
+        self.vh = h
+        self.is_password = is_password
+        self.text = ""
+        self.is_focused = False
+        
+        # Cursor blink timing
+        self.cursor_visible = True
+        self.last_blink = time.time()
+
+        self.label = Label("", size=14, color=GameConfig.COLOR_TEXT, align="left")
+        self.placeholder_label = Label(placeholder, size=14, color=(120, 110, 140), align="left")
+
+    def handle_event(self, event, vx, vy):
+        """Manages keyboard typing captures and focus bounds hits."""
+        # Convert coords
+        rx = vx - self.vw // 2
+        ry = vy - self.vh // 2
+        rect = pygame.Rect(rx, ry, self.vw, self.vh)
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            vmx = mx / GameConfig.scale_x
+            vmy = my / GameConfig.scale_y
+            if rect.collidepoint(vmx, vmy):
+                self.is_focused = True
+            else:
+                self.is_focused = False
+
+        elif event.type == pygame.KEYDOWN and self.is_focused:
+            if event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            elif event.key in [pygame.K_RETURN, pygame.K_ESCAPE]:
+                self.is_focused = False
+            else:
+                # Add printable characters (limit length to fit input area)
+                if event.unicode and len(self.text) < 24 and event.unicode.isprintable():
+                    self.text += event.unicode
+
+    def draw(self, surface, vx, vy):
+        """Draws the text input field card container."""
+        # Convert to screen coords
+        sw = int(self.vw * GameConfig.scale_x)
+        sh = int(self.vh * GameConfig.scale_y)
+        sx = GameConfig.to_screen_x(vx) - sw // 2
+        sy = GameConfig.to_screen_y(vy) - sh // 2
+
+        field_rect = pygame.Rect(sx, sy, sw, sh)
+        
+        # Background
+        bg_color = (25, 20, 45) if self.is_focused else (20, 16, 36)
+        pygame.draw.rect(surface, bg_color, field_rect, border_radius=8)
+
+        # Border outline
+        border_color = GameConfig.COLOR_ACCENT if self.is_focused else (60, 50, 85)
+        pygame.draw.rect(surface, border_color, field_rect, width=1, border_radius=8)
+
+        # Draw content
+        if self.text:
+            display_text = "*" * len(self.text) if self.is_password else self.text
+            self.label.set_text(display_text)
+            self.label.draw(surface, vx - self.vw // 2 + 15, vy, originX=0, originY=0.5)
+        else:
+            self.placeholder_label.draw(surface, vx - self.vw // 2 + 15, vy, originX=0, originY=0.5)
+
+        # Draw typing cursor indicator if focused
+        if self.is_focused:
+            # Blink cursor every 0.5s
+            if time.time() - self.last_blink > 0.5:
+                self.cursor_visible = not self.cursor_visible
+                self.last_blink = time.time()
+
+            if self.cursor_visible:
+                # Measure text width roughly
+                font_name = 'Outfit'
+                scaled_size = GameConfig.scale_font_size(14)
+                try:
+                    font = pygame.font.SysFont(font_name, scaled_size)
+                except Exception:
+                    font = pygame.font.Font(None, scaled_size)
+                
+                display_text = "*" * len(self.text) if self.is_password else self.text
+                tw, _ = font.size(display_text)
+                
+                # Draw cursor line
+                cx = sx + int(15 * GameConfig.scale_x) + tw
+                cy_start = sy + int(8 * GameConfig.scale_y)
+                cy_end = sy + sh - int(8 * GameConfig.scale_y)
+                pygame.draw.line(surface, GameConfig.COLOR_PRIMARY, (cx, cy_start), (cx, cy_end), width=2)
