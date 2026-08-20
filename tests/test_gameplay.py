@@ -113,5 +113,36 @@ class TestGameplayMechanics(unittest.TestCase):
         self.assertEqual(sanitized["settings"]["music"], True) # Fallback to default bool
         self.assertEqual(sanitized["stats"]["bubbles_popped"], 0) # Non-negative bounds clamped
 
+    def test_special_bubbles_loading(self):
+        # Verify loading of obstacles (7) and rescue pets (9)
+        grid_data = [
+            [0, 7, 1],
+            [9, 2, -1]
+        ]
+        self.board.load_layout(grid_data)
+        self.assertEqual(self.board.grid[0][1].bubble_type, "obstacle")
+        self.assertEqual(self.board.grid[0][1].color, (120, 120, 120))
+        self.assertEqual(self.board.grid[1][0].bubble_type, "rescue")
+        self.assertEqual(self.board.grid[1][0].color, (244, 143, 177))
+
+    def test_lightning_row_clear(self):
+        # Inject standard bubbles in a row
+        red_color = (255, 59, 48)
+        self.board.grid[1][0] = Bubble(red_color, row=1, col=0)
+        self.board.grid[1][1] = Bubble(red_color, row=1, col=1)
+        self.board.grid[1][2] = Bubble(red_color, row=1, col=2, bubble_type="lightning")
+        
+        # Simulate lightning activation
+        hit_r, hit_c = 1, 2
+        targets = []
+        for c in range(self.board.cols):
+            if self.board.grid[hit_r][c] != self.board.blank:
+                targets.append((hit_r, c))
+        self.board.pop_bubbles(targets)
+        
+        # Assert all popped
+        for c in range(self.board.cols):
+            self.assertEqual(self.board.grid[hit_r][c], self.board.blank)
+
 if __name__ == '__main__':
     unittest.main()

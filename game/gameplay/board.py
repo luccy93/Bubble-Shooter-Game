@@ -22,9 +22,14 @@ class Board:
         for r in range(min(len(layout_grid), self.rows)):
             for c in range(min(len(layout_grid[r]), self.cols)):
                 color_idx = layout_grid[r][c]
-                if color_idx >= 0 and color_idx < len(GameConfig.BUBBLE_COLORS):
-                    color = GameConfig.BUBBLE_COLORS[color_idx]
-                    self.grid[r][c] = Bubble(color, row=r, col=c)
+                if color_idx >= 0:
+                    if color_idx < len(GameConfig.BUBBLE_COLORS):
+                        color = GameConfig.BUBBLE_COLORS[color_idx]
+                        self.grid[r][c] = Bubble(color, row=r, col=c)
+                    elif color_idx == 7:
+                        self.grid[r][c] = Bubble((120, 120, 120), row=r, col=c, bubble_type="obstacle")
+                    elif color_idx == 9:
+                        self.grid[r][c] = Bubble((244, 143, 177), row=r, col=c, bubble_type="rescue")
         self.recalculate_positions()
 
     def clear(self):

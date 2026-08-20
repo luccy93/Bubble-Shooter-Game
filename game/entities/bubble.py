@@ -64,6 +64,26 @@ class Bubble(pygame.sprite.Sprite):
 
     def draw(self, surface):
         """Draws a premium 3D radial-glossy bubble on the screen."""
+        # 0. Sync colors for special types
+        symbol = None
+        symbol_color = (255, 255, 255)
+        
+        if self.bubble_type == "bomb":
+            symbol = "B"
+            self.color = (255, 102, 0)
+        elif self.bubble_type == "lightning":
+            symbol = "L"
+            self.color = (186, 104, 200)
+        elif self.bubble_type == "fireball":
+            symbol = "F"
+            self.color = (255, 75, 40)
+        elif self.bubble_type == "rescue":
+            symbol = "🐱"
+            self.color = (244, 143, 177)
+        elif self.bubble_type == "obstacle":
+            symbol = "🧱"
+            self.color = (120, 120, 120)
+
         sx = GameConfig.to_screen_x(self.vx)
         sy = GameConfig.to_screen_y(self.vy)
         srad = int(self.radius * min(GameConfig.scale_x, GameConfig.scale_y))
@@ -91,15 +111,18 @@ class Bubble(pygame.sprite.Sprite):
 
             # 3. Inner radial gloss highlight (3D sphere effect)
             gloss_surf = pygame.Surface((srad * 2, srad * 2), pygame.SRCALPHA)
-            # Gloss highlight center (offset towards top-left)
             gx, gy = int(srad * 0.7), int(srad * 0.6)
             for r in range(1, int(srad * 0.7)):
                 alpha = int(140 * (1 - r / (srad * 0.7)))
                 pygame.draw.circle(gloss_surf, (255, 255, 255, alpha), (gx, gy), r)
             surface.blit(gloss_surf, (sx - srad, sy - srad))
 
-            # Draw symbol on Bomb bubble
-            if self.bubble_type == "bomb":
-                font = pygame.font.SysFont(None, int(srad * 1.2))
-                text = font.render("B", True, (255, 255, 255))
+            # Draw symbol centered inside special bubbles
+            if symbol:
+                font_name = 'Segoe UI Emoji' if self.bubble_type == "rescue" else 'Arial'
+                try:
+                    font = pygame.font.SysFont(font_name, int(srad * 1.1), bold=True)
+                except Exception:
+                    font = pygame.font.Font(None, int(srad * 1.1))
+                text = font.render(symbol, True, symbol_color)
                 surface.blit(text, text.get_rect(center=(sx, sy)))

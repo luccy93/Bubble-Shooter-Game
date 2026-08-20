@@ -53,6 +53,12 @@ class SceneManager:
             elif name == "Profile":
                 from game.scenes.profile import ProfileScene
                 self.current_scene = ProfileScene(self, **kwargs)
+            elif name == "Shop":
+                from game.scenes.shop import ShopScene
+                self.current_scene = ShopScene(self, **kwargs)
+            elif name == "DailyRewards":
+                from game.scenes.daily_rewards import DailyRewardsScene
+                self.current_scene = DailyRewardsScene(self, **kwargs)
 
     def handle_event(self, event):
         if self.current_scene:

@@ -29,18 +29,25 @@ class LevelSelectScene(BaseScene):
             self.path_points.append((vx, vy))
 
         # Camera scroll targeting
-        # Center view around the active unlocked level node (keep it in the middle of the screen Y space)
-        target_idx = min(self.unlocked_level - 1, 14)
+        # Determine current world and local level index
+        if newly_unlocked:
+            self.world_id = min((newly_unlocked - 1) // 15, 7)
+            target_idx = min((newly_unlocked - 1) % 15, 14)
+        else:
+            self.world_id = min((self.unlocked_level - 1) // 15, 7)
+            target_idx = min((self.unlocked_level - 1) % 15, 14)
+
         active_y = self.path_points[target_idx][1]
         self.scroll_y = active_y - GameConfig.VIRTUAL_HEIGHT / 2
 
-        # Clamp scroll ranges (Y climbs upwards, so negative offsets correspond to higher levels)
-        min_scroll = self.path_points[-1][1] - 150
-        max_scroll = GameConfig.VIRTUAL_HEIGHT - 250
-        self.scroll_y = max(min_scroll, min(self.scroll_y, max_scroll))
+        self.min_scroll = self.path_points[-1][1] - 150
+        self.max_scroll = GameConfig.VIRTUAL_HEIGHT - 250
+        self.scroll_y = max(self.min_scroll, min(self.scroll_y, self.max_scroll))
 
         # UI elements
         self.back_btn = Button("← BACK", w=120, h=36, bg_color=GameConfig.COLOR_BG_LIGHT)
+        self.prev_world_btn = Button("◀", w=36, h=36, bg_color=GameConfig.COLOR_BG_LIGHT)
+        self.next_world_btn = Button("▶", w=36, h=36, bg_color=GameConfig.COLOR_BG_LIGHT)
 
         # Unlock animation timer
         self.unlock_scale = 1.0
@@ -58,6 +65,24 @@ class LevelSelectScene(BaseScene):
             self.manager.change_scene("MainMenu")
             return
 
+        # World selection actions
+        if self.prev_world_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 130, 42):
+            if self.world_id > 0:
+                self.world_id -= 1
+                AudioManager.play_sfx('button')
+                self.scroll_y = self.path_points[0][1] - GameConfig.VIRTUAL_HEIGHT / 2
+                self.scroll_y = max(self.min_scroll, min(self.scroll_y, self.max_scroll))
+            return
+
+        max_unlocked_world = min((self.unlocked_level - 1) // 15, 7)
+        if self.next_world_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 130, 42):
+            if self.world_id < max_unlocked_world:
+                self.world_id += 1
+                AudioManager.play_sfx('button')
+                self.scroll_y = self.path_points[0][1] - GameConfig.VIRTUAL_HEIGHT / 2
+                self.scroll_y = max(self.min_scroll, min(self.scroll_y, self.max_scroll))
+            return
+
         # Level node hit targets checks
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             mx, my = event.pos
@@ -68,7 +93,7 @@ class LevelSelectScene(BaseScene):
             adjusted_vmy = vmy + self.scroll_y
 
             for idx, (px, py) in enumerate(self.path_points):
-                lvl_id = idx + 1
+                lvl_id = self.world_id * 15 + idx + 1
                 dist = math.hypot(vmx - px, adjusted_vmy - py)
                 # Level node radius target is 30px
                 if dist <= 32:
@@ -84,9 +109,7 @@ class LevelSelectScene(BaseScene):
             self.scroll_y -= dy / GameConfig.scale_y
             
             # Clamp boundaries
-            min_scroll = self.path_points[-1][1] - 150
-            max_scroll = GameConfig.VIRTUAL_HEIGHT - 250
-            self.scroll_y = max(min_scroll, min(self.scroll_y, max_scroll))
+            self.scroll_y = max(self.min_scroll, min(self.scroll_y, self.max_scroll))
 
     def update(self, dt):
         ParticleSystem.update()
@@ -127,7 +150,7 @@ class LevelSelectScene(BaseScene):
 
         # Draw Level nodes
         for idx, (px, py) in enumerate(self.path_points):
-            lvl_id = idx + 1
+            lvl_id = self.world_id * 15 + idx + 1
             is_locked = lvl_id > self.unlocked_level
             is_new = (lvl_id == self.newly_unlocked)
             
@@ -208,7 +231,19 @@ class LevelSelectScene(BaseScene):
         # Header HUD card (Non-scrolling overlays)
         hud_bar = pygame.Rect(0, 0, GameConfig.actual_width, int(68 * GameConfig.scale_y))
         pygame.draw.rect(surface, (10, 8, 20, 180), hud_bar)
-        Label("ADVENTURE ROAD", size=20, title=True).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 42)
+        
+        # World name label
+        world_info = LevelManager.get_world(self.world_id)
+        world_title = f"{world_info['icon']} {world_info['name']}"
+        Label(world_title, size=17, title=True).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 42)
+
+        # Draw world navigation buttons next to it
+        if self.world_id > 0:
+            self.prev_world_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 130, 42)
+        
+        max_unlocked_world = min((self.unlocked_level - 1) // 15, 7)
+        if self.world_id < max_unlocked_world:
+            self.next_world_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 130, 42)
 
         # Back Button
         self.back_btn.draw(surface, 80, 50)

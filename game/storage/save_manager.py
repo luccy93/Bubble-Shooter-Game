@@ -18,6 +18,14 @@ class SaveManager:
             "unlocked_level": 1,
             "high_score": 0,
             "stars": {},  # "level_id": stars (0-3)
+            "coins": 200,
+            "boosters": {
+                "bomb": 3,
+                "lightning": 3,
+                "rainbow": 3,
+                "fireball": 3
+            },
+            "last_claim_date": "",
             "stats": {
                 "games_played": 0,
                 "levels_completed": 0,
@@ -159,7 +167,7 @@ class SaveManager:
                 unlocked = int(acc_val.get("unlocked_level", 1))
             except (ValueError, TypeError):
                 unlocked = 1
-            p_san["unlocked_level"] = max(1, min(unlocked, 100))
+            p_san["unlocked_level"] = max(1, min(unlocked, 3000))
 
             try:
                 high_score = int(acc_val.get("high_score", 0))
@@ -177,6 +185,22 @@ class SaveManager:
                     p_san["stars"][str(lvl)] = s
                 except (ValueError, TypeError):
                     continue
+
+            # Coins & Boosters
+            try:
+                p_san["coins"] = max(0, int(acc_val.get("coins", 200)))
+            except (ValueError, TypeError):
+                p_san["coins"] = 200
+
+            p_san["boosters"] = {}
+            boosters = acc_val.get("boosters", {})
+            for b_type in ["bomb", "lightning", "rainbow", "fireball"]:
+                try:
+                    p_san["boosters"][b_type] = max(0, int(boosters.get(b_type, 3)))
+                except (ValueError, TypeError):
+                    p_san["boosters"][b_type] = 3
+
+            p_san["last_claim_date"] = str(acc_val.get("last_claim_date", ""))
 
             # Stats validation
             stats = acc_val.get("stats", {})
@@ -230,7 +254,7 @@ class SaveManager:
         profile["stars"][str(level)] = max(profile["stars"].get(str(level), 0), stars)
         profile["high_score"] = max(profile["high_score"], score)
         if level >= profile["unlocked_level"]:
-            profile["unlocked_level"] = min(level + 1, 15)  # Cap at max level 15
+            profile["unlocked_level"] = min(level + 1, 3000)  # Expanded limit up to 3000
         cls.save_game()
 
     @classmethod
@@ -269,6 +293,54 @@ class SaveManager:
         return False
 
     @classmethod
+    def get_coins(cls):
+        profile = cls.get_profile()
+        return profile.get("coins", 200)
+
+    @classmethod
+    def add_coins(cls, amount):
+        data = cls.load_game()
+        profile = data["accounts"][cls._active_user]
+        profile["coins"] = max(0, profile.get("coins", 200) + amount)
+        cls.save_game()
+
+    @classmethod
+    def get_boosters(cls):
+        profile = cls.get_profile()
+        return profile.get("boosters", {"bomb": 3, "lightning": 3, "rainbow": 3, "fireball": 3})
+
+    @classmethod
+    def add_booster(cls, b_type, count=1):
+        data = cls.load_game()
+        profile = data["accounts"][cls._active_user]
+        boosters = profile.setdefault("boosters", {"bomb": 3, "lightning": 3, "rainbow": 3, "fireball": 3})
+        boosters[b_type] = max(0, boosters.get(b_type, 3) + count)
+        cls.save_game()
+
+    @classmethod
+    def use_booster(cls, b_type):
+        data = cls.load_game()
+        profile = data["accounts"][cls._active_user]
+        boosters = profile.setdefault("boosters", {"bomb": 3, "lightning": 3, "rainbow": 3, "fireball": 3})
+        if boosters.get(b_type, 0) > 0:
+            boosters[b_type] -= 1
+            cls.save_game()
+            return True
+        return False
+
+    @classmethod
+    def get_last_claim_date(cls):
+        profile = cls.get_profile()
+        return profile.get("last_claim_date", "")
+
+    @classmethod
+    def set_last_claim_date(cls, date_str):
+        data = cls.load_game()
+        profile = data["accounts"][cls._active_user]
+        profile["last_claim_date"] = date_str
+        cls.save_game()
+
+    @classmethod
     def reset_progress(cls):
         """Resets the currently active profile to default blank values."""
         data = cls.load_game()
@@ -276,6 +348,14 @@ class SaveManager:
             "unlocked_level": 1,
             "high_score": 0,
             "stars": {},
+            "coins": 200,
+            "boosters": {
+                "bomb": 3,
+                "lightning": 3,
+                "rainbow": 3,
+                "fireball": 3
+            },
+            "last_claim_date": "",
             "stats": {
                 "games_played": 0,
                 "levels_completed": 0,

@@ -57,18 +57,40 @@ class GameplayScene(BaseScene):
         self.victory_overlay = None
         self.defeat_overlay = None
 
+        # Level Objective
+        self.objective = self.level_data.get("objective", {"type": "clear_board"})
+
         # Custom UI buttons inside gameplay
         self.pause_btn = Button("⏸", w=40, h=40, bg_color=GameConfig.COLOR_BG_LIGHT)
         self._init_powerup_buttons()
+
+        # Notification message
+        self.notice_text = ""
+        self.notice_time = 0
 
         # Start soundtrack
         AudioManager.play_music('Whatever_It _Takes_OGG.ogg')
 
     def _init_powerup_buttons(self):
         # Powerup selectors at bottom bar
-        self.bomb_btn = Button("💣", w=60, h=36, bg_color=(255, 102, 0))
-        self.rainbow_btn = Button("🌈", w=60, h=36, bg_color=(156, 39, 176))
-        self.laser_btn = Button("⚡", w=60, h=36, bg_color=(0, 188, 212))
+        boosters = SaveManager.get_boosters()
+        self.bomb_btn = Button(f"💣 x{boosters.get('bomb',0)}", w=72, h=36, bg_color=(255, 102, 0), font_size=11)
+        self.lightning_btn = Button(f"⚡ x{boosters.get('lightning',0)}", w=72, h=36, bg_color=(156, 39, 176), font_size=11)
+        self.rainbow_btn = Button(f"🌈 x{boosters.get('rainbow',0)}", w=72, h=36, bg_color=(0, 188, 212), font_size=11)
+        self.fireball_btn = Button(f"🔥 x{boosters.get('fireball',0)}", w=72, h=36, bg_color=(220, 50, 50), font_size=11)
+
+    def toggle_powerup(self, b_type):
+        boosters = SaveManager.get_boosters()
+        if boosters.get(b_type, 0) > 0:
+            if self.active_powerup == b_type:
+                self.active_powerup = None
+            else:
+                self.active_powerup = b_type
+            AudioManager.play_sfx('button')
+        else:
+            self.notice_text = f"Out of {b_type.capitalize()} boosters! Buy in Shop."
+            self.notice_time = time.time()
+            AudioManager.play_sfx('failure')
 
     def prepare_next_bubble(self):
         """Prepares active and preview bubbles."""
@@ -105,17 +127,29 @@ class GameplayScene(BaseScene):
         self.total_shots = 0
         self.start_time = time.time()
         
+        self.objective = self.level_data.get("objective", {"type": "clear_board"})
+        self.notice_text = ""
+        self.notice_time = 0
+
         self.board.load_layout(self.level_data["grid"])
         self.current_bubble = None
         self.next_bubble = None
         self.is_firing = False
         self.active_powerup = None
         self.prepare_next_bubble()
+        self._refresh_booster_buttons()
 
         self.show_pause = False
         self.show_victory = False
         self.show_defeat = False
         ParticleSystem.clear()
+
+    def _refresh_booster_buttons(self):
+        boosters = SaveManager.get_boosters()
+        self.bomb_btn.label.set_text(f"💣 x{boosters.get('bomb',0)}")
+        self.lightning_btn.label.set_text(f"⚡ x{boosters.get('lightning',0)}")
+        self.rainbow_btn.label.set_text(f"🌈 x{boosters.get('rainbow',0)}")
+        self.fireball_btn.label.set_text(f"🔥 x{boosters.get('fireball',0)}")
 
     def handle_event(self, event):
         # Forward inputs to pause/victory/defeat overlays if active
@@ -136,17 +170,18 @@ class GameplayScene(BaseScene):
                 return
 
         # Powerup interactions check
-        if self.bomb_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 80, GameConfig.VIRTUAL_HEIGHT - 35):
-            self.active_powerup = "bomb"
-            AudioManager.play_sfx('button')
+        y_pos = GameConfig.VIRTUAL_HEIGHT - 35
+        if self.bomb_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 120, y_pos):
+            self.toggle_powerup("bomb")
             return
-        if self.rainbow_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 35):
-            self.active_powerup = "rainbow"
-            AudioManager.play_sfx('button')
+        if self.lightning_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 40, y_pos):
+            self.toggle_powerup("lightning")
             return
-        if self.laser_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 80, GameConfig.VIRTUAL_HEIGHT - 35):
-            self.active_powerup = "laser"
-            AudioManager.play_sfx('button')
+        if self.rainbow_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 40, y_pos):
+            self.toggle_powerup("rainbow")
+            return
+        if self.fireball_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 120, y_pos):
+            self.toggle_powerup("fireball")
             return
 
         # Handle pause button
@@ -184,12 +219,20 @@ class GameplayScene(BaseScene):
         self.total_shots += 1
         
         # Apply selected power-ups
-        if self.active_powerup == "bomb":
-            self.current_bubble.bubble_type = "bomb"
-            self.current_bubble.color = (255, 102, 0)
-        elif self.active_powerup == "rainbow":
-            self.current_bubble.bubble_type = "rainbow"
-            self.current_bubble.color = (255, 255, 255)
+        if self.active_powerup:
+            if SaveManager.use_booster(self.active_powerup):
+                self.current_bubble.bubble_type = self.active_powerup
+                if self.active_powerup == "bomb":
+                    self.current_bubble.color = (255, 102, 0)
+                elif self.active_powerup == "lightning":
+                    self.current_bubble.color = (186, 104, 200)
+                elif self.active_powerup == "rainbow":
+                    self.current_bubble.color = (255, 255, 255)
+                elif self.active_powerup == "fireball":
+                    self.current_bubble.color = (255, 75, 40)
+                self._refresh_booster_buttons()
+            else:
+                self.active_powerup = None
             
         self.active_powerup = None
 
@@ -229,82 +272,138 @@ class GameplayScene(BaseScene):
                 self.current_bubble.update_rect()
                 AudioManager.play_sfx('button')  # Bounce sound
 
-            # Grid bubble collision checking
-            collided = False
-            hit_r, hit_c = -1, -1
-
-            # Check top ceiling boundary
-            if self.current_bubble.vy - GameConfig.BUBBLE_RAD <= GameConfig.board_y:
-                hit_r, hit_c = self.board.add_bubble_to_top(self.current_bubble)
-                collided = True
-            else:
-                # Check collision with other locked bubbles
+            # Check Fireball piercing logic
+            if self.current_bubble.bubble_type == "fireball":
+                to_pop = []
                 for r in range(self.board.rows):
                     for c in range(self.board.cols):
                         other = self.board.grid[r][c]
                         if other != self.board.blank:
-                            # Distance collision check
                             dist = math.hypot(self.current_bubble.vx - other.vx, self.current_bubble.vy - other.vy)
                             if dist < GameConfig.BUBBLE_WD - 4:
-                                hit_r, hit_c = self.board.snap_and_add(self.current_bubble, r, c)
-                                collided = True
-                                break
-                    if collided:
-                        break
-
-            if collided:
-                self.is_firing = False
+                                to_pop.append((r, c))
+                if to_pop:
+                    self.board.pop_bubbles(to_pop)
+                    points = len(to_pop) * 100
+                    self.score += points
+                    SaveManager.update_stats(bubbles_popped=len(to_pop))
+                    
+                    floaters = self.board.check_floaters()
+                    if floaters:
+                        self.board.pop_bubbles(floaters)
+                        self.score += len(floaters) * 200
+                        SaveManager.update_stats(bubbles_dropped=len(floaters))
                 
-                # Check target matches or bomb blast radius
-                new_bubble = self.board.grid[hit_r][hit_c]
-                if new_bubble != self.board.blank:
-                    if new_bubble.bubble_type == "bomb":
-                        # Blow up surrounding neighbors
-                        neighbors = self.board.get_neighbors(hit_r, hit_c)
-                        targets = [(hit_r, hit_c)] + [n for n in neighbors if self.board.grid[n[0]][n[1]] != self.board.blank]
-                        self.board.pop_bubbles(targets)
-                        
-                        points = len(targets) * 100
-                        self.score += points
-                        SaveManager.update_stats(bubbles_popped=len(targets))
-                    else:
-                        matches = self.board.check_matches(hit_r, hit_c, new_bubble.color)
-                        if len(matches) >= 3:
-                            self.combo_count += 1
-                            self.board.pop_bubbles(matches)
-                            
-                            # Add matching score
-                            points = len(matches) * 100 * self.combo_count
-                            self.score += points
-                            SaveManager.update_stats(bubbles_popped=len(matches))
+                # Fireball terminates when it reaches ceiling
+                if self.current_bubble.vy - GameConfig.BUBBLE_RAD <= GameConfig.board_y:
+                    self.is_firing = False
+                    self.current_bubble = None
+                    self.check_game_state()
+                    self.prepare_next_bubble()
+            else:
+                # Grid bubble collision checking (normal, bomb, lightning, rainbow)
+                collided = False
+                hit_r, hit_c = -1, -1
 
-                            # Drop floating clusters
+                # Check top ceiling boundary
+                if self.current_bubble.vy - GameConfig.BUBBLE_RAD <= GameConfig.board_y:
+                    hit_r, hit_c = self.board.add_bubble_to_top(self.current_bubble)
+                    collided = True
+                else:
+                    # Check collision with other locked bubbles
+                    for r in range(self.board.rows):
+                        for c in range(self.board.cols):
+                            other = self.board.grid[r][c]
+                            if other != self.board.blank:
+                                # Distance collision check
+                                dist = math.hypot(self.current_bubble.vx - other.vx, self.current_bubble.vy - other.vy)
+                                if dist < GameConfig.BUBBLE_WD - 4:
+                                    hit_r, hit_c = self.board.snap_and_add(self.current_bubble, r, c)
+                                    collided = True
+                                    break
+                        if collided:
+                            break
+
+                if collided:
+                    self.is_firing = False
+                    
+                    # Check target matches or special booster action
+                    new_bubble = self.board.grid[hit_r][hit_c]
+                    if new_bubble != self.board.blank:
+                        if new_bubble.bubble_type == "bomb":
+                            # Blow up surrounding neighbors
+                            neighbors = self.board.get_neighbors(hit_r, hit_c)
+                            targets = [(hit_r, hit_c)] + [n for n in neighbors if self.board.grid[n[0]][n[1]] != self.board.blank]
+                            self.board.pop_bubbles(targets)
+                            
+                            points = len(targets) * 100
+                            self.score += points
+                            SaveManager.update_stats(bubbles_popped=len(targets))
+                        elif new_bubble.bubble_type == "lightning":
+                            # Clears the entire snapped row
+                            targets = []
+                            for c in range(self.board.cols):
+                                if self.board.grid[hit_r][c] != self.board.blank:
+                                    targets.append((hit_r, c))
+                            self.board.pop_bubbles(targets)
+                            
+                            points = len(targets) * 100
+                            self.score += points
+                            SaveManager.update_stats(bubbles_popped=len(targets))
+                        else:
+                            matches = self.board.check_matches(hit_r, hit_c, new_bubble.color)
+                            if len(matches) >= 3:
+                                self.combo_count += 1
+                                self.board.pop_bubbles(matches)
+                                
+                                # Add matching score
+                                points = len(matches) * 100 * self.combo_count
+                                self.score += points
+                                SaveManager.update_stats(bubbles_popped=len(matches))
+
+                                # Drop floating clusters
+                                floaters = self.board.check_floaters()
+                                if floaters:
+                                    self.board.pop_bubbles(floaters)
+                                    self.score += len(floaters) * 200
+                                    SaveManager.update_stats(bubbles_dropped=len(floaters))
+                                
+                                if self.combo_count >= 2:
+                                    AudioManager.play_sfx('combo')
+                            else:
+                                self.combo_count = 0
+
+                        # Drop any floaters after bomb or lightning pop
+                        if new_bubble.bubble_type in ["bomb", "lightning"]:
                             floaters = self.board.check_floaters()
                             if floaters:
                                 self.board.pop_bubbles(floaters)
                                 self.score += len(floaters) * 200
                                 SaveManager.update_stats(bubbles_dropped=len(floaters))
-                            
-                            if self.combo_count >= 2:
-                                AudioManager.play_sfx('combo')
-                        else:
-                            self.combo_count = 0
 
-                # Clear projectile
-                self.current_bubble = None
-                self.check_game_state()
-                self.prepare_next_bubble()
+                    # Clear projectile
+                    self.current_bubble = None
+                    self.check_game_state()
+                    self.prepare_next_bubble()
 
     def check_game_state(self):
         """Evaluates win/lose constraints."""
         play_time = int(time.time() - self.start_time)
         
-        # WIN: all bubbles cleared
-        if self.board.is_empty():
+        # Check winning criteria
+        win = False
+        if self.objective["type"] == "clear_board":
+            win = self.board.is_empty()
+        elif self.objective["type"] == "rescue":
+            rescue_count = sum(1 for r in range(self.board.rows) for c in range(self.board.cols) if self.board.grid[r][c] != self.board.blank and self.board.grid[r][c].bubble_type == "rescue")
+            win = (rescue_count == 0)
+        elif self.objective["type"] == "score":
+            win = (self.score >= self.objective.get("target", 1000))
+
+        if win:
             stars = LevelManager.calculate_stars(self.level_id, self.score)
             
             # Save achievements check
-            unlocked_ach = SaveManager.load_game()["achievements"]
             if self.level_id == 1:
                 SaveManager.unlock_achievement("first_win")
             if stars == 3:
@@ -324,7 +423,6 @@ class GameplayScene(BaseScene):
             return
 
         # LOSE: out of moves or bubble crosses launcher boundary
-        # Launcher boundary is at y = launcher.vy - BUBBLE_RAD
         bottom_limit = self.launcher.vy - GameConfig.BUBBLE_RAD
         if self.moves <= 0 or self.board.check_lose(bottom_limit):
             SaveManager.update_stats(
@@ -386,9 +484,16 @@ class GameplayScene(BaseScene):
 
     def _draw_trajectory(self, surface):
         """Draws dotted reflection trajectory path."""
-        is_laser = self.active_powerup == "laser"
-        max_bounces = 5 if is_laser else 2
-        dot_color = (0, 255, 255) if is_laser else (255, 255, 255)
+        max_bounces = 2
+        dot_color = (255, 255, 255)
+        if self.active_powerup == "bomb":
+            dot_color = (255, 102, 0)
+        elif self.active_powerup == "lightning":
+            dot_color = (186, 104, 200)
+        elif self.active_powerup == "rainbow":
+            dot_color = (0, 255, 255)
+        elif self.active_powerup == "fireball":
+            dot_color = (255, 75, 40)
 
         # Start from launcher center
         cx = self.launcher.vx
@@ -456,6 +561,25 @@ class GameplayScene(BaseScene):
 
         self.pause_btn.draw(surface, GameConfig.VIRTUAL_WIDTH - 30, 24)
 
+        # Draw objective description text centered below HUD bar (board shifted to board_y=80)
+        obj_text = ""
+        if self.objective["type"] == "clear_board":
+            obj_text = "Objective: Clear all bubbles"
+        elif self.objective["type"] == "rescue":
+            rescue_count = sum(1 for r in range(self.board.rows) for c in range(self.board.cols) if self.board.grid[r][c] != self.board.blank and self.board.grid[r][c].bubble_type == "rescue")
+            obj_text = f"Rescue all pets (🐱 remaining: {rescue_count})"
+        elif self.objective["type"] == "score":
+            target = self.objective.get("target", 1000)
+            obj_text = f"Target Score: {target} (Current: {self.score})"
+        
+        Label(obj_text, size=12, color=GameConfig.COLOR_TEXT_MUTED).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 64)
+
+        # Draw game notices (such as out-of-stock messages)
+        if self.notice_text and time.time() - self.notice_time < 2.0:
+            Label(self.notice_text, size=13, color=GameConfig.COLOR_FAILURE, title=True, shadow=True).draw(
+                surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT / 2 - 100
+            )
+
         # Bottom Powerups Bar panel
         p_bar = pygame.Rect(0, int((GameConfig.VIRTUAL_HEIGHT - 70) * GameConfig.scale_y), GameConfig.actual_width, int(70 * GameConfig.scale_y))
         pygame.draw.rect(surface, (10, 8, 20, 160), p_bar)
@@ -479,10 +603,12 @@ class GameplayScene(BaseScene):
                 surface, 55, GameConfig.VIRTUAL_HEIGHT - 22
             )
 
-        # Draw power-up selectors
-        self.bomb_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 80, GameConfig.VIRTUAL_HEIGHT - 35)
-        self.rainbow_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 35)
-        self.laser_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 80, GameConfig.VIRTUAL_HEIGHT - 35)
+        # Draw power-up selectors symmetrically
+        y_pos = GameConfig.VIRTUAL_HEIGHT - 35
+        self.bomb_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 120, y_pos)
+        self.lightning_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 40, y_pos)
+        self.rainbow_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 40, y_pos)
+        self.fireball_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 120, y_pos)
 
         # Draw active powerup indicator
         if self.active_powerup:

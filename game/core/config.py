@@ -20,7 +20,7 @@ class GameConfig:
     BOARD_WIDTH = 400
     BOARD_HEIGHT = 500
     board_x = (VIRTUAL_WIDTH - BOARD_WIDTH) // 2
-    board_y = 60
+    board_y = 80
 
     # Bubble parameters
     BUBBLE_RAD = 24

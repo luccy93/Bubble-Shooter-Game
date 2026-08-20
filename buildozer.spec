@@ -1,12 +1,17 @@
 [app]
 title = Bubble Shooter
 package.name = bubbleshooter
-package.domain = org.luccy93
+package.domain = com.luccy93
 source.dir = .
 source.include_exts = py,png,jpg,ogg,json
 source.include_patterns = assets/*,game/*
-version = 2.0.0
+version = 1.0.0
+version.numeric = 1
 requirements = python3,pygame-ce
+
+# Icon and Splash Screen
+icon.filename = %(source.dir)s/assets/images/app_icon.png
+presplash.filename = %(source.dir)s/assets/images/app_splash.png
 
 # Android configuration
 orientation = portrait
