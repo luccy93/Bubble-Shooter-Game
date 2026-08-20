@@ -3,39 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+    <meta name="description" content="Bubble Shooter - Premium mobile puzzle game">
+    <meta name="theme-color" content="#0f0c20">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Bubble Shooter</title>
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
 </head>
 <body>
-    <div id="game-container">
-        <!-- HUD -->
-        <div class="hud-panel">
-            <div class="hud-badge">⭐ <span id="score-text">0</span></div>
-            <div class="hud-badge">🎯 LEVEL 1</div>
-            <div class="hud-badge">💣 MOVES: <span id="moves-text">20</span></div>
-        </div>
+    <div id="game-container"></div>
 
-        <!-- Power-up Dock -->
-        <div class="powerup-bar">
-            <button class="btn-powerup" onclick="activatePowerup('bomb')">💣 Bomb</button>
-            <button class="btn-powerup" onclick="activatePowerup('rainbow')">🌈 Wildcard</button>
-            <button class="btn-powerup" onclick="activatePowerup('laser')">⚡ Super Laser</button>
-        </div>
-
-        <!-- Modal -->
-        <div id="game-modal" class="modal-overlay">
-            <div class="modal-box">
-                <div id="modal-title" class="modal-title win">STAGE CLEAR!</div>
-                <div id="modal-desc" class="modal-desc">Score: 12,500</div>
-                <button class="btn-modal" onclick="restartGame()">PLAY AGAIN</button>
-                <button id="btn-ad" class="btn-modal" style="background: #9c27b0; display: none;" onclick="watchRewardedAd()">📺 +5 EXTRA MOVES</button>
-            </div>
-        </div>
-    </div>
-    
     <script src="storage.js"></script>
     <script src="levels.js"></script>
     <script src="audio.js"></script>

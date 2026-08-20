@@ -1,0 +1,1871 @@
+// game.js — Premium Bubble Shooter (Phaser 3)
+// Core BubbleGridEngine preserved exactly. All UI rendered in Phaser scenes.
+
+// =========================================================================
+// 0. GLOBAL STATE
+// =========================================================================
+const COLORS = [0xff3b30, 0x007aff, 0x34c759, 0xffcc00, 0xaf52de];
+const COLOR_KEYS = ['red', 'blue', 'green', 'yellow', 'purple'];
+const GAME_W = 400;
+const GAME_H = 700;
+
+let currentLevel = 1;
+let currentScore = 0;
+let levelMoves = 20;
+let activePowerup = null;
+let sessionCombo = 0;
+let gameStartTime = 0;
+
+// Haptic feedback bridge
+function triggerHaptics() {
+    const s = StorageManager.getSettings();
+    if (!s.hapticsEnabled) return;
+    if (typeof Android !== 'undefined' && Android.triggerHapticFeedback) {
+        try { Android.triggerHapticFeedback(); } catch (e) {}
+    }
+}
+
+// =========================================================================
+// 1. HEXAGONAL GRID ENGINE (PRESERVED EXACTLY)
+// =========================================================================
+class BubbleGridEngine {
+    constructor(rows = 12, cols = 8, bubbleRadius = 24) {
+        this.rows = rows;
+        this.cols = cols;
+        this.bubbleRadius = bubbleRadius;
+        this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+
+        this.EVEN_ROW_NEIGHBORS = [
+            { r: -1, c: -1 }, { r: -1, c: 0 },
+            { r: 0,  c: -1 }, { r: 0,  c: 1 },
+            { r: 1,  c: -1 }, { r: 1,  c: 0 }
+        ];
+        this.ODD_ROW_NEIGHBORS = [
+            { r: -1, c: 0 }, { r: -1, c: 1 },
+            { r: 0,  c: -1 }, { r: 0,  c: 1 },
+            { r: 1,  c: 0 }, { r: 1,  c: 1 }
+        ];
+    }
+
+    getPixelCoords(row, col, startX = 0, startY = 60) {
+        const diameter = this.bubbleRadius * 2;
+        const rowHeight = this.bubbleRadius * Math.sqrt(3);
+        const xOffset = (row % 2 !== 0) ? this.bubbleRadius : 0;
+        return {
+            x: startX + col * diameter + this.bubbleRadius + xOffset,
+            y: startY + row * rowHeight + this.bubbleRadius
+        };
+    }
+
+    getGridCoords(x, y, startX = 0, startY = 60) {
+        const rowHeight = this.bubbleRadius * Math.sqrt(3);
+        const row = Math.floor((y - startY) / rowHeight);
+        const xOffset = (row % 2 !== 0) ? this.bubbleRadius : 0;
+        const col = Math.floor((x - startX - xOffset) / (this.bubbleRadius * 2));
+        return {
+            row: Math.max(0, Math.min(row, this.rows - 1)),
+            col: Math.max(0, Math.min(col, this.cols - 1))
+        };
+    }
+
+    getNeighbors(row, col) {
+        const neighbors = [];
+        const offsets = (row % 2 === 0) ? this.EVEN_ROW_NEIGHBORS : this.ODD_ROW_NEIGHBORS;
+        for (const off of offsets) {
+            const nr = row + off.r, nc = col + off.c;
+            if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols) {
+                neighbors.push({ row: nr, col: nc });
+            }
+        }
+        return neighbors;
+    }
+
+    findMatchingCluster(startRow, startCol) {
+        const startBubble = this.grid[startRow][startCol];
+        if (!startBubble) return [];
+
+        const targetType = startBubble.colorType;
+        const queue = [{ row: startRow, col: startCol }];
+        const visited = Array.from({ length: this.rows }, () => Array(this.cols).fill(false));
+        const matched = [];
+        visited[startRow][startCol] = true;
+
+        while (queue.length > 0) {
+            const curr = queue.shift();
+            const bubble = this.grid[curr.row][curr.col];
+            if (bubble && (bubble.colorType === targetType || bubble.colorType === 'rainbow' || targetType === 'rainbow')) {
+                matched.push(bubble);
+                for (const n of this.getNeighbors(curr.row, curr.col)) {
+                    if (!visited[n.row][n.col]) {
+                        visited[n.row][n.col] = true;
+                        const nb = this.grid[n.row][n.col];
+                        if (nb && (nb.colorType === targetType || nb.colorType === 'rainbow' || targetType === 'rainbow')) {
+                            queue.push(n);
+                        }
+                    }
+                }
+            }
+        }
+        return matched.length >= 3 || targetType === 'rainbow' ? matched : [];
+    }
+
+    findFloatingClusters() {
+        const visited = Array.from({ length: this.rows }, () => Array(this.cols).fill(false));
+        const queue = [];
+
+        for (let c = 0; c < this.cols; c++) {
+            if (this.grid[0][c] !== null) {
+                visited[0][c] = true;
+                queue.push({ row: 0, col: c });
+            }
+        }
+
+        while (queue.length > 0) {
+            const curr = queue.shift();
+            for (const n of this.getNeighbors(curr.row, curr.col)) {
+                if (!visited[n.row][n.col] && this.grid[n.row][n.col] !== null) {
+                    visited[n.row][n.col] = true;
+                    queue.push(n);
+                }
+            }
+        }
+
+        const floating = [];
+        for (let r = 0; r < this.rows; r++) {
+            for (let c = 0; c < this.cols; c++) {
+                const b = this.grid[r][c];
+                if (b !== null && !visited[r][c]) {
+                    floating.push(b);
+                }
+            }
+        }
+        return floating;
+    }
+}
+
+// =========================================================================
+// 2. UI HELPER: Premium Text + Buttons
+// =========================================================================
+function createText(scene, x, y, text, opts = {}) {
+    const defaults = {
+        fontFamily: opts.title ? 'Fredoka One' : 'Outfit',
+        fontSize: opts.size || '18px',
+        fill: opts.color || '#ffffff',
+        align: opts.align || 'center',
+        stroke: opts.stroke || undefined,
+        strokeThickness: opts.strokeThickness || 0,
+        shadow: opts.shadow ? { color: '#000', fill: true, x: 1, y: 3, blur: 4 } : undefined,
+        wordWrap: opts.wordWrap ? { width: opts.wordWrap } : undefined
+    };
+    const t = scene.add.text(x, y, text, defaults).setOrigin(opts.originX ?? 0.5, opts.originY ?? 0.5);
+    if (opts.depth !== undefined) t.setDepth(opts.depth);
+    return t;
+}
+
+function createButton(scene, x, y, label, opts = {}) {
+    const w = opts.w || 200;
+    const h = opts.h || 50;
+    const bgColor = opts.bg || 0x6e4cff;
+    const borderColor = opts.border || 0xffffff;
+
+    const container = scene.add.container(x, y);
+
+    // Button background
+    const bg = scene.add.graphics();
+    bg.fillStyle(bgColor, 1);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 25);
+    bg.lineStyle(2, borderColor, 0.3);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 25);
+
+    // Glow/shadow
+    const shadow = scene.add.graphics();
+    shadow.fillStyle(bgColor, 0.3);
+    shadow.fillRoundedRect(-w / 2 + 2, -h / 2 + 4, w, h, 25);
+
+    // Label
+    const label_t = createText(scene, 0, 0, label, {
+        title: true, size: opts.fontSize || '20px', color: opts.textColor || '#ffffff'
+    });
+
+    container.add([shadow, bg, label_t]);
+    container.setSize(w, h);
+    container.setInteractive();
+
+    // Press feedback
+    container.on('pointerdown', () => {
+        scene.tweens.add({ targets: container, scaleX: 0.93, scaleY: 0.93, duration: 60 });
+        AudioManager.playSFX('button');
+        triggerHaptics();
+    });
+    container.on('pointerup', () => {
+        scene.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 80 });
+    });
+    container.on('pointerout', () => {
+        scene.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 80 });
+    });
+
+    return container;
+}
+
+// Draw gradient background
+function drawBackground(scene, topColor, botColor) {
+    const bg = scene.add.graphics();
+    bg.fillGradientStyle(topColor, topColor, botColor, botColor, 1);
+    bg.fillRect(0, 0, GAME_W, GAME_H);
+    bg.setDepth(-10);
+    return bg;
+}
+
+// Floating decorative bubbles on menu
+function createMenuParticles(scene) {
+    const particles = [];
+    for (let i = 0; i < 12; i++) {
+        const x = Phaser.Math.Between(20, GAME_W - 20);
+        const y = Phaser.Math.Between(20, GAME_H - 20);
+        const r = Phaser.Math.Between(8, 20);
+        const color = COLORS[Phaser.Math.Between(0, COLORS.length - 1)];
+        const circle = scene.add.circle(x, y, r, color, 0.15);
+        circle.setDepth(-5);
+        scene.tweens.add({
+            targets: circle,
+            y: y + Phaser.Math.Between(-40, 40),
+            x: x + Phaser.Math.Between(-20, 20),
+            alpha: { from: 0.08, to: 0.2 },
+            duration: Phaser.Math.Between(3000, 6000),
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+        particles.push(circle);
+    }
+    return particles;
+}
+
+// =========================================================================
+// 3. BOOT SCENE
+// =========================================================================
+class BootScene extends Phaser.Scene {
+    constructor() { super('BootScene'); }
+
+    preload() {
+        const w = this.cameras.main.width;
+        const h = this.cameras.main.height;
+
+        // Background
+        drawBackground(this, 0x0f0c20, 0x191530);
+
+        // Loading text
+        const loadText = createText(this, w / 2, h / 2 - 60, 'BUBBLE SHOOTER', {
+            title: true, size: '28px', color: '#ff9800', shadow: true
+        });
+
+        // Progress bar
+        const barBg = this.add.graphics();
+        barBg.fillStyle(0x222222, 0.8);
+        barBg.fillRoundedRect(w / 2 - 130, h / 2 - 12, 260, 24, 12);
+
+        const progressBar = this.add.graphics();
+
+        this.load.on('progress', (value) => {
+            progressBar.clear();
+            progressBar.fillStyle(0x6e4cff, 1);
+            progressBar.fillRoundedRect(w / 2 - 126, h / 2 - 8, 252 * value, 16, 8);
+        });
+
+        this.load.on('complete', () => {
+            progressBar.destroy();
+            barBg.destroy();
+        });
+
+        // Load assets
+        this.load.image('arrow', 'images/Arrow.png');
+        this.load.audio('pop', 'audio/popcork.ogg');
+        this.load.audio('music_bg', 'audio/bgmusic.ogg');
+        this.load.audio('music_goofy', 'audio/Goofy_Theme.ogg');
+        this.load.audio('music_takes', 'audio/Whatever_It _Takes_OGG.ogg');
+    }
+
+    create() {
+        // Generate glossy bubble textures
+        COLORS.forEach((color, idx) => this.createBubbleTexture(COLOR_KEYS[idx], color));
+        this.createBubbleTexture('bomb', 0xff9500);
+        this.createBubbleTexture('rainbow', 0xffffff);
+
+        // Generate arrow texture if image didn't load
+        if (!this.textures.exists('arrow')) {
+            this.createArrowTexture();
+        }
+
+        // Init audio
+        AudioManager.init(this);
+
+        // Transition to menu
+        this.time.delayedCall(400, () => {
+            this.cameras.main.fadeOut(300, 15, 12, 32);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.scene.start('MenuScene');
+            });
+        });
+    }
+
+    createBubbleTexture(key, colorHex) {
+        const size = 48;
+        const canvas = this.textures.createCanvas(key, size, size);
+        const ctx = canvas.context;
+
+        const r = (colorHex >> 16) & 255;
+        const g = (colorHex >> 8) & 255;
+        const b = colorHex & 255;
+
+        // Shadow
+        ctx.fillStyle = `rgba(0,0,0,0.2)`;
+        ctx.beginPath();
+        ctx.arc(25, 26, 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main body gradient
+        const grad = ctx.createRadialGradient(18, 16, 2, 24, 24, 22);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.15, `rgb(${Math.min(r + 120, 255)}, ${Math.min(g + 120, 255)}, ${Math.min(b + 120, 255)})`);
+        grad.addColorStop(0.5, `rgb(${r}, ${g}, ${b})`);
+        grad.addColorStop(1, `rgb(${Math.max(r - 60, 0)}, ${Math.max(g - 60, 0)}, ${Math.max(b - 60, 0)})`);
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(24, 24, 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight gloss
+        const gloss = ctx.createRadialGradient(18, 16, 1, 20, 18, 14);
+        gloss.addColorStop(0, 'rgba(255,255,255,0.7)');
+        gloss.addColorStop(0.5, 'rgba(255,255,255,0.15)');
+        gloss.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gloss;
+        ctx.beginPath();
+        ctx.arc(20, 18, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rim highlight
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(24, 24, 21, 0, Math.PI * 2);
+        ctx.stroke();
+
+        canvas.refresh();
+    }
+
+    createArrowTexture() {
+        const w = 24, h = 48;
+        const canvas = this.textures.createCanvas('arrow', w, h);
+        const ctx = canvas.context;
+
+        // Arrow triangle pointing up
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 2);
+        ctx.lineTo(w - 4, h - 6);
+        ctx.lineTo(4, h - 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Subtle border
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        canvas.refresh();
+    }
+}
+
+// =========================================================================
+// 4. MENU SCENE
+// =========================================================================
+class MenuScene extends Phaser.Scene {
+    constructor() { super('MenuScene'); }
+
+    create() {
+        this.cameras.main.fadeIn(400, 15, 12, 32);
+        const w = GAME_W, h = GAME_H;
+
+        drawBackground(this, 0x0f0c20, 0x191530);
+        createMenuParticles(this);
+
+        // Start music
+        AudioManager.playMusic('music_goofy');
+
+        // Title
+        const title = createText(this, w / 2, 140, 'BUBBLE\nSHOOTER', {
+            title: true, size: '52px', color: '#ff9800', shadow: true,
+            stroke: '#fff', strokeThickness: 2
+        });
+        // Title glow pulse
+        this.tweens.add({
+            targets: title, alpha: { from: 0.85, to: 1 },
+            duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+
+        // Decorative bubbles around title
+        const deco = [
+            { x: 70, y: 100, c: COLORS[0] }, { x: 330, y: 90, c: COLORS[1] },
+            { x: 50, y: 180, c: COLORS[2] }, { x: 350, y: 185, c: COLORS[3] }
+        ];
+        deco.forEach(d => {
+            const b = this.add.circle(d.x, d.y, 14, d.c, 0.6);
+            this.tweens.add({
+                targets: b, y: d.y - 8, duration: 2000,
+                yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+            });
+        });
+
+        // PLAY button (primary)
+        const playBtn = createButton(this, w / 2, 300, '▶  PLAY', {
+            w: 220, h: 58, bg: 0xff6d00, fontSize: '24px'
+        });
+        playBtn.on('pointerup', () => {
+            this.cameras.main.fadeOut(250, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.scene.start('LevelSelectScene');
+            });
+        });
+        // Pulse animation on play button
+        this.tweens.add({
+            targets: playBtn, scaleX: 1.03, scaleY: 1.03,
+            duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+
+        // Secondary buttons
+        const btnY = 390;
+        const btnGap = 58;
+
+        const levelBtn = createButton(this, w / 2, btnY, '📋  Level Select', {
+            w: 200, h: 44, bg: 0x3a2d7a, fontSize: '16px'
+        });
+        levelBtn.on('pointerup', () => {
+            this.cameras.main.fadeOut(200, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.scene.start('LevelSelectScene');
+            });
+        });
+
+        const settingsBtn = createButton(this, w / 2, btnY + btnGap, '⚙️  Settings', {
+            w: 200, h: 44, bg: 0x3a2d7a, fontSize: '16px'
+        });
+        settingsBtn.on('pointerup', () => {
+            this.scene.start('SettingsScene');
+        });
+
+        const howToBtn = createButton(this, w / 2, btnY + btnGap * 2, '❓  How to Play', {
+            w: 200, h: 44, bg: 0x3a2d7a, fontSize: '16px'
+        });
+        howToBtn.on('pointerup', () => {
+            this.scene.start('HowToPlayScene');
+        });
+
+        const achieveBtn = createButton(this, w / 2, btnY + btnGap * 3, '🏆  Achievements', {
+            w: 200, h: 44, bg: 0x3a2d7a, fontSize: '16px'
+        });
+        achieveBtn.on('pointerup', () => {
+            this.scene.start('AchievementsScene');
+        });
+
+        const statsBtn = createButton(this, w / 2, btnY + btnGap * 4, '📊  Statistics', {
+            w: 200, h: 44, bg: 0x3a2d7a, fontSize: '16px'
+        });
+        statsBtn.on('pointerup', () => {
+            this.scene.start('StatisticsScene');
+        });
+
+        // High Score footer
+        const saveData = StorageManager.getSaveData();
+        createText(this, w / 2, h - 40, `HIGH SCORE: ${saveData.highScore}`, {
+            size: '14px', color: '#ffeb3b'
+        });
+    }
+}
+
+// =========================================================================
+// 5. LEVEL SELECT SCENE
+// =========================================================================
+class LevelSelectScene extends Phaser.Scene {
+    constructor() { super('LevelSelectScene'); }
+
+    create() {
+        this.cameras.main.fadeIn(300, 0, 0, 0);
+        const w = GAME_W, h = GAME_H;
+
+        drawBackground(this, 0x0f0c20, 0x191530);
+
+        // Title
+        createText(this, w / 2, 45, 'SELECT LEVEL', {
+            title: true, size: '28px', color: '#ffffff', shadow: true
+        });
+
+        // Scrollable content
+        const saveData = StorageManager.getSaveData();
+        const unlocked = saveData.unlockedLevel || 1;
+
+        let yOffset = 90;
+
+        for (let worldIdx = 0; worldIdx < LevelManager.worlds.length; worldIdx++) {
+            const world = LevelManager.worlds[worldIdx];
+            const worldLevels = LevelManager.getLevelsForWorld(worldIdx);
+
+            // World header
+            createText(this, w / 2, yOffset, `${world.icon}  ${world.name}`, {
+                title: true, size: '20px', color: '#' + world.color.toString(16).padStart(6, '0')
+            });
+            yOffset += 35;
+
+            // Level cards grid (3 per row)
+            for (let i = 0; i < worldLevels.length; i++) {
+                const lvl = worldLevels[i];
+                const col = i % 3;
+                const row = Math.floor(i / 3);
+                const x = w / 2 - 100 + col * 100;
+                const y = yOffset + row * 95;
+
+                const isLocked = lvl.levelNum > unlocked;
+                const stars = saveData.levelStars ? (saveData.levelStars[lvl.levelNum] || 0) : 0;
+
+                this._createLevelCard(x, y, lvl.levelNum, isLocked, stars);
+            }
+            yOffset += Math.ceil(worldLevels.length / 3) * 95 + 20;
+        }
+
+        // Back button
+        const backBtn = createButton(this, w / 2, h - 45, '← BACK', {
+            w: 140, h: 42, bg: 0x442266, fontSize: '16px'
+        });
+        backBtn.on('pointerup', () => {
+            this.cameras.main.fadeOut(200, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.scene.start('MenuScene');
+            });
+        });
+    }
+
+    _createLevelCard(x, y, levelNum, isLocked, stars) {
+        const container = this.add.container(x, y);
+        const cardW = 75, cardH = 75;
+
+        // Card bg
+        const bg = this.add.graphics();
+        if (isLocked) {
+            bg.fillStyle(0x222233, 0.6);
+        } else {
+            bg.fillStyle(0x3a2d7a, 0.8);
+        }
+        bg.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 14);
+        bg.lineStyle(2, isLocked ? 0x444466 : 0x6e4cff, 0.5);
+        bg.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 14);
+
+        container.add(bg);
+
+        if (isLocked) {
+            // Lock icon
+            const lock = createText(this, 0, -5, '🔒', { size: '24px' });
+            container.add(lock);
+        } else {
+            // Level number
+            const num = createText(this, 0, -12, `${levelNum}`, {
+                title: true, size: '26px', color: '#ffffff'
+            });
+            container.add(num);
+
+            // Stars
+            let starText = '';
+            for (let s = 0; s < 3; s++) {
+                starText += s < stars ? '⭐' : '☆';
+            }
+            const starLabel = createText(this, 0, 18, starText, { size: '14px' });
+            container.add(starLabel);
+
+            // Interactive
+            container.setSize(cardW, cardH);
+            container.setInteractive();
+            container.on('pointerdown', () => {
+                this.tweens.add({ targets: container, scaleX: 0.9, scaleY: 0.9, duration: 60 });
+                triggerHaptics();
+                AudioManager.playSFX('button');
+            });
+            container.on('pointerup', () => {
+                currentLevel = levelNum;
+                this.cameras.main.fadeOut(200, 0, 0, 0);
+                this.cameras.main.once('camerafadeoutcomplete', () => {
+                    this.scene.start('GameScene');
+                });
+            });
+            container.on('pointerout', () => {
+                this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 80 });
+            });
+        }
+    }
+}
+
+// =========================================================================
+// 6. GAME SCENE (MAIN GAMEPLAY)
+// =========================================================================
+class GameScene extends Phaser.Scene {
+    constructor() { super('GameScene'); }
+
+    create() {
+        this.cameras.main.fadeIn(400, 0, 0, 0);
+
+        // World background
+        const world = LevelManager.getWorld(currentLevel);
+        drawBackground(this, world.bgGradientTop || 0x0f0c20, world.bgGradientBot || 0x191530);
+
+        // Setup Grid Engine
+        this.gridEngine = new BubbleGridEngine(12, 8, 24);
+        this.leftWallX = 10;
+        this.rightWallX = 390;
+        this.isFiring = false;
+        this.comboCount = 0;
+        this.sessionPopped = 0;
+        this.sessionDropped = 0;
+        this.totalShotsThisLevel = 0;
+
+        // Groups
+        this.gridGroup = this.physics.add.staticGroup();
+
+        // Trajectory
+        this.trajectoryGraphics = this.add.graphics();
+        this.trajectoryGraphics.setDepth(5);
+
+        // Launcher Position
+        this.cannonPos = new Phaser.Math.Vector2(GAME_W / 2, GAME_H - 100);
+        this.createLauncher();
+
+        // Load Level
+        this.loadLevel(currentLevel);
+
+        // HUD (in Phaser)
+        this.createHUD();
+
+        // Music
+        AudioManager.playMusic('music_takes');
+
+        // Track play time
+        gameStartTime = Date.now();
+
+        // Input
+        this.input.on('pointermove', (pointer) => this.updateAim(pointer));
+        this.input.on('pointerdown', (pointer) => {
+            // Don't shoot if clicking HUD area
+            if (pointer.y < 50) return;
+            this.fireBubble(pointer);
+        });
+    }
+
+    createLauncher() {
+        // Cannon base glow
+        const baseGlow = this.add.circle(this.cannonPos.x, this.cannonPos.y, 40, 0x6e4cff, 0.15);
+        baseGlow.setDepth(3);
+        this.tweens.add({
+            targets: baseGlow, alpha: { from: 0.1, to: 0.25 },
+            duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+
+        // Cannon base
+        const base = this.add.circle(this.cannonPos.x, this.cannonPos.y, 30, 0x2c2c3e);
+        base.setStrokeStyle(2, 0xffffff, 0.2);
+        base.setDepth(4);
+
+        // Barrel
+        this.barrel = this.add.sprite(this.cannonPos.x, this.cannonPos.y - 10, 'arrow');
+        this.barrel.setOrigin(0.5, 0.85);
+        this.barrel.setScale(1.3);
+        this.barrel.setTint(0x6e4cff);
+        this.barrel.setDepth(5);
+
+        // Next bubble preview
+        this.nextBubblePreviewBg = this.add.circle(60, GAME_H - 95, 22, 0x222244, 0.5);
+        this.nextBubblePreviewBg.setStrokeStyle(1, 0x6e4cff, 0.3);
+        this.nextBubblePreviewBg.setDepth(4);
+
+        const nextLabel = createText(this, 60, GAME_H - 65, 'NEXT', {
+            size: '10px', color: '#9988cc'
+        });
+        nextLabel.setDepth(4);
+
+        this.nextBubbleSprite = this.add.sprite(60, GAME_H - 95, '');
+        this.nextBubbleSprite.setScale(0.75);
+        this.nextBubbleSprite.setDepth(5);
+    }
+
+    createHUD() {
+        // Semi-transparent HUD bar at top
+        const hudBg = this.add.graphics();
+        hudBg.fillStyle(0x000000, 0.35);
+        hudBg.fillRect(0, 0, GAME_W, 48);
+        hudBg.setDepth(20);
+
+        // Level badge (top-left)
+        this.hudLevelText = createText(this, 12, 24, `LV ${currentLevel}`, {
+            title: true, size: '16px', color: '#ffeb3b', originX: 0, depth: 21
+        });
+
+        // Score (center-left)
+        this.hudScoreText = createText(this, GAME_W / 2, 24, `⭐ 0`, {
+            title: true, size: '16px', color: '#ffffff', depth: 21
+        });
+
+        // Moves (center-right)
+        this.hudMovesText = createText(this, GAME_W - 80, 24, `💣 ${levelMoves}`, {
+            title: true, size: '16px', color: '#ffffff', depth: 21
+        });
+
+        // Pause button (top-right)
+        const pauseBtn = createText(this, GAME_W - 25, 24, '⏸', {
+            size: '22px', depth: 21
+        });
+        pauseBtn.setInteractive({ useHandCursor: true });
+        pauseBtn.on('pointerdown', () => {
+            triggerHaptics();
+            this.scene.pause();
+            this.scene.launch('PauseScene');
+        });
+
+        // Power-up buttons (bottom bar)
+        this._createPowerupBar();
+    }
+
+    _createPowerupBar() {
+        const y = GAME_H - 38;
+        const btnW = 80;
+        const gap = 10;
+        const startX = GAME_W / 2 - (btnW * 1.5 + gap);
+
+        const powerups = [
+            { key: 'bomb', label: '💣', color: 0xff6600 },
+            { key: 'rainbow', label: '🌈', color: 0x9c27b0 },
+            { key: 'laser', label: '⚡', color: 0x00bcd4 }
+        ];
+
+        powerups.forEach((pu, i) => {
+            const x = startX + i * (btnW + gap) + btnW / 2;
+            const bg = this.add.graphics();
+            bg.fillStyle(pu.color, 0.7);
+            bg.fillRoundedRect(x - btnW / 2, y - 16, btnW, 32, 16);
+            bg.setDepth(20);
+
+            const label = createText(this, x, y, pu.label, {
+                size: '18px', depth: 21
+            });
+            label.setInteractive({ useHandCursor: true });
+            label.on('pointerdown', () => {
+                activePowerup = pu.key;
+                triggerHaptics();
+                AudioManager.playSFX('button');
+                // Visual feedback
+                this.tweens.add({ targets: label, scaleX: 1.3, scaleY: 1.3, duration: 100, yoyo: true });
+            });
+        });
+    }
+
+    loadLevel(levelNum) {
+        currentScore = 0;
+        this.comboCount = 0;
+        this.sessionPopped = 0;
+        this.sessionDropped = 0;
+        this.totalShotsThisLevel = 0;
+
+        const levelData = LevelManager.getLevel(levelNum);
+        levelMoves = levelData.moves;
+
+        const grid = levelData.grid;
+        for (let r = 0; r < grid.length; r++) {
+            for (let c = 0; c < grid[r].length; c++) {
+                const colorIdx = grid[r][c];
+                if (colorIdx >= 0 && colorIdx < COLOR_KEYS.length) {
+                    this.createGridBubble(r, c, COLOR_KEYS[colorIdx]);
+                }
+            }
+        }
+
+        this.prepareNextBubble();
+    }
+
+    createGridBubble(row, col, colorKey) {
+        const pos = this.gridEngine.getPixelCoords(row, col);
+        const bubble = this.add.sprite(pos.x, pos.y, colorKey);
+        bubble.setDepth(2);
+
+        const data = { id: `b_${row}_${col}`, row, col, colorType: colorKey, sprite: bubble };
+        this.gridEngine.grid[row][col] = data;
+        this.gridGroup.add(bubble);
+        return data;
+    }
+
+    prepareNextBubble() {
+        if (this.currentBubbleSprite) return;
+
+        const colorIdx = Phaser.Math.Between(0, COLORS.length - 1);
+        this.nextColorKey = COLOR_KEYS[colorIdx];
+
+        // Prepare next-next preview
+        const previewIdx = Phaser.Math.Between(0, COLORS.length - 1);
+        this.nextNextColorKey = COLOR_KEYS[previewIdx];
+        this.nextBubbleSprite.setTexture(this.nextNextColorKey);
+
+        this.currentBubbleSprite = this.add.sprite(this.cannonPos.x, this.cannonPos.y - 25, this.nextColorKey);
+        this.currentBubbleSprite.setDepth(6);
+        this.physics.add.existing(this.currentBubbleSprite);
+        this.currentBubbleSprite.colorType = this.nextColorKey;
+
+        // Pop-in animation
+        this.currentBubbleSprite.setScale(0);
+        this.tweens.add({
+            targets: this.currentBubbleSprite, scaleX: 1, scaleY: 1,
+            duration: 150, ease: 'Back.easeOut'
+        });
+    }
+
+    updateAim(pointer) {
+        if (this.isFiring) return;
+
+        const dir = new Phaser.Math.Vector2(
+            pointer.x - this.cannonPos.x,
+            pointer.y - (this.cannonPos.y - 25)
+        );
+        let angle = dir.angle();
+
+        // Clamp
+        if (angle > 0) angle = angle > Math.PI / 2 ? -Math.PI + 0.26 : -0.26;
+        else angle = Phaser.Math.Clamp(angle, -Math.PI + 0.26, -0.26);
+
+        this.aimAngle = angle;
+        this.barrel.rotation = angle + Math.PI / 2;
+
+        this.drawTrajectory();
+    }
+
+    drawTrajectory() {
+        this.trajectoryGraphics.clear();
+
+        const isLaser = activePowerup === 'laser';
+        const dotColor = isLaser ? 0x00ffff : 0xffffff;
+        const dotAlpha = isLaser ? 0.9 : 0.6;
+
+        let currentPos = new Phaser.Math.Vector2(this.cannonPos.x, this.cannonPos.y - 25);
+        let currentDir = new Phaser.Math.Vector2(Math.cos(this.aimAngle), Math.sin(this.aimAngle));
+        let bounces = 0;
+        let maxBounces = isLaser ? 5 : 2;
+
+        while (bounces <= maxBounces) {
+            let targetX = currentDir.x > 0 ? this.rightWallX : this.leftWallX;
+            let distToWall = (targetX - currentPos.x) / currentDir.x;
+            let hitY = currentPos.y + currentDir.y * distToWall;
+
+            if (hitY < 60) {
+                let distToCeiling = (60 - currentPos.y) / currentDir.y;
+                let endX = currentPos.x + currentDir.x * distToCeiling;
+                this.drawDottedLine(currentPos, new Phaser.Math.Vector2(endX, 60), dotColor, dotAlpha);
+                break;
+            } else {
+                let wallHitPos = new Phaser.Math.Vector2(targetX, hitY);
+                this.drawDottedLine(currentPos, wallHitPos, dotColor, dotAlpha);
+                currentPos = wallHitPos;
+                currentDir.x *= -1;
+                bounces++;
+            }
+        }
+    }
+
+    drawDottedLine(p1, p2, color, alpha) {
+        const dist = Phaser.Math.Distance.BetweenPoints(p1, p2);
+        const dots = Math.floor(dist / 14);
+        for (let i = 0; i < dots; i++) {
+            const t = i / dots;
+            const x = Phaser.Math.Interpolation.Linear([p1.x, p2.x], t);
+            const y = Phaser.Math.Interpolation.Linear([p1.y, p2.y], t);
+            const a = alpha * (1 - t * 0.5);
+            this.trajectoryGraphics.fillStyle(color, a);
+            this.trajectoryGraphics.fillCircle(x, y, 2.5);
+        }
+    }
+
+    fireBubble(pointer) {
+        if (this.isFiring || !this.currentBubbleSprite) return;
+        if (pointer.y > this.cannonPos.y + 10) return; // Don't fire downward
+        this.isFiring = true;
+        this.trajectoryGraphics.clear();
+        this.totalShotsThisLevel++;
+
+        // Apply power-up
+        if (activePowerup === 'bomb') {
+            this.currentBubbleSprite.colorType = 'bomb';
+            this.currentBubbleSprite.setTexture('bomb');
+        } else if (activePowerup === 'rainbow') {
+            this.currentBubbleSprite.colorType = 'rainbow';
+            this.currentBubbleSprite.setTexture('rainbow');
+        }
+        activePowerup = null;
+
+        levelMoves--;
+        this.hudMovesText.setText(`💣 ${levelMoves}`);
+        if (levelMoves <= 5) this.hudMovesText.setColor('#ff5252');
+        if (levelMoves <= 3) {
+            this.tweens.add({
+                targets: this.hudMovesText,
+                scaleX: 1.2, scaleY: 1.2, duration: 100, yoyo: true
+            });
+        }
+
+        // Launcher recoil
+        const recoilDist = 8;
+        this.tweens.add({
+            targets: this.barrel,
+            y: this.barrel.y + recoilDist * Math.cos(this.aimAngle),
+            x: this.barrel.x - recoilDist * Math.sin(this.aimAngle),
+            duration: 50, yoyo: true
+        });
+
+        AudioManager.playSFX('shoot');
+        triggerHaptics();
+
+        // Update stats
+        StorageManager.updateStats({ totalShots: 1 });
+
+        const speed = 900;
+        const vx = Math.cos(this.aimAngle) * speed;
+        const vy = Math.sin(this.aimAngle) * speed;
+
+        this.currentBubbleSprite.body.setVelocity(vx, vy);
+        this.currentBubbleSprite.body.setCollideWorldBounds(true);
+        this.currentBubbleSprite.body.setBounce(1, 0);
+
+        this.gridCollider = this.physics.add.overlap(
+            this.currentBubbleSprite,
+            this.gridGroup,
+            this.onBubbleCollision,
+            null,
+            this
+        );
+    }
+
+    update() {
+        if (this.currentBubbleSprite && this.isFiring) {
+            if (this.currentBubbleSprite.y <= 84) {
+                this.onBubbleCollision(this.currentBubbleSprite, null);
+            }
+        }
+    }
+
+    onBubbleCollision(projectile, hitTarget) {
+        if (!this.isFiring) return;
+        this.isFiring = false;
+        projectile.body.stop();
+        if (this.gridCollider) this.physics.world.removeCollider(this.gridCollider);
+
+        const gridCoord = this.gridEngine.getGridCoords(projectile.x, projectile.y);
+        const targetPixel = this.gridEngine.getPixelCoords(gridCoord.row, gridCoord.col);
+
+        projectile.x = targetPixel.x;
+        projectile.y = targetPixel.y;
+
+        // Snap animation
+        this.tweens.add({
+            targets: projectile, scaleX: 1.15, scaleY: 1.15,
+            duration: 60, yoyo: true
+        });
+
+        const newBubble = {
+            id: `b_${gridCoord.row}_${gridCoord.col}`,
+            row: gridCoord.row,
+            col: gridCoord.col,
+            colorType: projectile.colorType,
+            sprite: projectile
+        };
+        this.gridEngine.grid[gridCoord.row][gridCoord.col] = newBubble;
+        this.gridGroup.add(projectile);
+        this.currentBubbleSprite = null;
+
+        triggerHaptics();
+
+        if (newBubble.colorType === 'bomb') {
+            this.triggerBombExplosion(gridCoord.row, gridCoord.col);
+        } else {
+            this.processMatches(gridCoord.row, gridCoord.col);
+        }
+
+        this.checkGameEnd();
+        this.time.delayedCall(200, () => this.prepareNextBubble());
+    }
+
+    triggerBombExplosion(row, col) {
+        const affected = [];
+        for (let r = row - 1; r <= row + 1; r++) {
+            for (let c = col - 1; c <= col + 1; c++) {
+                if (r >= 0 && r < this.gridEngine.rows && c >= 0 && c < this.gridEngine.cols) {
+                    if (this.gridEngine.grid[r][c]) {
+                        affected.push(this.gridEngine.grid[r][c]);
+                    }
+                }
+            }
+        }
+        // Screen shake
+        this.cameras.main.shake(150, 0.01);
+        AudioManager.playSFX('pop');
+        this.popBubbles(affected);
+    }
+
+    processMatches(row, col) {
+        const matched = this.gridEngine.findMatchingCluster(row, col);
+        if (matched.length >= 3) {
+            this.comboCount++;
+            AudioManager.playSFX('pop');
+
+            if (this.comboCount >= 2) {
+                AudioManager.playSFX('combo');
+                this.showComboText(this.comboCount);
+            }
+
+            // Screen shake for big matches
+            if (matched.length >= 5) {
+                this.cameras.main.shake(100, 0.008);
+            }
+
+            this.popBubbles(matched);
+
+            const floating = this.gridEngine.findFloatingClusters();
+            if (floating.length > 0) {
+                this.dropBubbles(floating);
+            }
+        } else {
+            this.comboCount = 0;
+        }
+    }
+
+    popBubbles(bubbles) {
+        const points = bubbles.length * 100;
+        currentScore += points;
+        this.sessionPopped += bubbles.length;
+        this.hudScoreText.setText(`⭐ ${currentScore}`);
+
+        // Update stats
+        StorageManager.updateStats({ bubblesPopped: bubbles.length });
+
+        // Floating score text
+        if (bubbles.length > 0) {
+            const avgX = bubbles.reduce((s, b) => s + (b.sprite ? b.sprite.x : 0), 0) / bubbles.length;
+            const avgY = bubbles.reduce((s, b) => s + (b.sprite ? b.sprite.y : 0), 0) / bubbles.length;
+            this.showFloatingScore(avgX, avgY, `+${points}`);
+        }
+
+        bubbles.forEach(b => {
+            this.gridEngine.grid[b.row][b.col] = null;
+            if (b.sprite) {
+                // Particle burst
+                this.createPopParticles(b.sprite.x, b.sprite.y, b.sprite.texture ? b.sprite.texture.key : 'red');
+
+                this.tweens.add({
+                    targets: b.sprite,
+                    scaleX: 1.5, scaleY: 1.5, alpha: 0,
+                    duration: 150,
+                    onComplete: () => b.sprite.destroy()
+                });
+            }
+        });
+    }
+
+    dropBubbles(bubbles) {
+        const points = bubbles.length * 200;
+        currentScore += points;
+        this.sessionDropped += bubbles.length;
+        this.hudScoreText.setText(`⭐ ${currentScore}`);
+
+        // Update stats
+        StorageManager.updateStats({ bubblesDropped: bubbles.length });
+
+        AudioManager.playSFX('drop');
+
+        if (bubbles.length > 0) {
+            const avgX = bubbles.reduce((s, b) => s + (b.sprite ? b.sprite.x : 0), 0) / bubbles.length;
+            const avgY = bubbles.reduce((s, b) => s + (b.sprite ? b.sprite.y : 0), 0) / bubbles.length;
+            this.showFloatingScore(avgX, avgY, `+${points}`, '#00e5ff');
+        }
+
+        bubbles.forEach((b, i) => {
+            this.gridEngine.grid[b.row][b.col] = null;
+            if (b.sprite) {
+                this.tweens.add({
+                    targets: b.sprite,
+                    y: b.sprite.y + 400,
+                    alpha: 0,
+                    angle: Phaser.Math.Between(-90, 90),
+                    duration: 500,
+                    delay: i * 30,
+                    ease: 'Power2',
+                    onComplete: () => b.sprite.destroy()
+                });
+            }
+        });
+    }
+
+    createPopParticles(x, y, colorKey) {
+        const colorIdx = COLOR_KEYS.indexOf(colorKey);
+        const color = colorIdx >= 0 ? COLORS[colorIdx] : 0xffffff;
+
+        for (let i = 0; i < 6; i++) {
+            const p = this.add.circle(x, y, Phaser.Math.Between(2, 5), color, 0.8);
+            p.setDepth(10);
+            const angle = (Math.PI * 2 / 6) * i;
+            const dist = Phaser.Math.Between(20, 45);
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                alpha: 0,
+                scaleX: 0.3, scaleY: 0.3,
+                duration: 300,
+                ease: 'Power2',
+                onComplete: () => p.destroy()
+            });
+        }
+    }
+
+    showFloatingScore(x, y, text, color) {
+        const scoreText = createText(this, x, y, text, {
+            title: true, size: '22px', color: color || '#ffeb3b', shadow: true, depth: 15
+        });
+        this.tweens.add({
+            targets: scoreText,
+            y: y - 60, alpha: 0,
+            duration: 800, ease: 'Power2',
+            onComplete: () => scoreText.destroy()
+        });
+    }
+
+    showComboText(combo) {
+        const text = createText(this, GAME_W / 2, GAME_H / 2 - 40, `COMBO x${combo}!`, {
+            title: true, size: '32px', color: '#ff9800', shadow: true, depth: 15
+        });
+        text.setScale(0.5);
+        this.tweens.add({
+            targets: text,
+            scaleX: 1.2, scaleY: 1.2,
+            duration: 200, ease: 'Back.easeOut',
+            onComplete: () => {
+                this.tweens.add({
+                    targets: text,
+                    alpha: 0, y: text.y - 40,
+                    duration: 500, delay: 300,
+                    onComplete: () => text.destroy()
+                });
+            }
+        });
+
+        // Update highest combo stat
+        StorageManager.updateStats({ highestCombo: combo });
+    }
+
+    checkGameEnd() {
+        let remaining = 0;
+        for (let r = 0; r < this.gridEngine.rows; r++) {
+            for (let c = 0; c < this.gridEngine.cols; c++) {
+                if (this.gridEngine.grid[r][c]) remaining++;
+            }
+        }
+
+        const playTime = Date.now() - gameStartTime;
+
+        if (remaining === 0) {
+            // WIN
+            const stars = LevelManager.calculateStars(currentLevel, currentScore);
+            StorageManager.saveProgress(currentLevel, currentScore, stars);
+            StorageManager.updateStats({
+                levelsCompleted: 1,
+                totalGames: 1,
+                totalPlayTimeMs: playTime,
+                highestScore: currentScore,
+                perfectClears: remaining === 0 ? 1 : 0
+            });
+
+            // Check achievements
+            this._checkAchievements();
+
+            this.time.delayedCall(500, () => {
+                this.scene.pause();
+                this.scene.launch('VictoryScene', {
+                    score: currentScore,
+                    stars: stars,
+                    level: currentLevel
+                });
+            });
+        } else if (levelMoves <= 0) {
+            // LOSE
+            StorageManager.updateStats({
+                totalGames: 1,
+                totalPlayTimeMs: playTime,
+                highestScore: currentScore
+            });
+
+            this.time.delayedCall(500, () => {
+                this.scene.pause();
+                this.scene.launch('FailureScene', {
+                    score: currentScore,
+                    level: currentLevel,
+                    remaining: remaining
+                });
+            });
+        }
+    }
+
+    _checkAchievements() {
+        const stats = StorageManager.getStats();
+        const checks = [
+            { id: 'first_bubble', condition: stats.bubblesPopped >= 1 },
+            { id: 'first_win', condition: stats.levelsCompleted >= 1 },
+            { id: 'pop_100', condition: stats.bubblesPopped >= 100 },
+            { id: 'pop_1000', condition: stats.bubblesPopped >= 1000 },
+            { id: 'combo_master', condition: stats.highestCombo >= 5 },
+            { id: 'perfect_clear', condition: stats.perfectClears >= 1 },
+            { id: 'levels_10', condition: stats.levelsCompleted >= 10 },
+        ];
+        checks.forEach(c => {
+            if (c.condition) StorageManager.unlockAchievement(c.id);
+        });
+    }
+}
+
+// =========================================================================
+// 7. PAUSE SCENE (overlay)
+// =========================================================================
+class PauseScene extends Phaser.Scene {
+    constructor() { super('PauseScene'); }
+
+    create() {
+        const w = GAME_W, h = GAME_H;
+
+        // Dim overlay
+        const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x0f0c20, 0.8);
+        overlay.setInteractive(); // Absorb clicks
+
+        createText(this, w / 2, h / 3 - 30, 'PAUSED', {
+            title: true, size: '40px', color: '#ffffff', shadow: true
+        });
+
+        const resumeBtn = createButton(this, w / 2, h / 2 - 20, '▶  RESUME', {
+            w: 200, h: 50, bg: 0x34c759, fontSize: '20px'
+        });
+        resumeBtn.on('pointerup', () => {
+            this.scene.resume('GameScene');
+            this.scene.stop();
+        });
+
+        const restartBtn = createButton(this, w / 2, h / 2 + 50, '🔄  RESTART', {
+            w: 200, h: 50, bg: 0xff9800, fontSize: '20px'
+        });
+        restartBtn.on('pointerup', () => {
+            this.scene.stop('GameScene');
+            this.scene.start('GameScene');
+        });
+
+        const settingsBtn = createButton(this, w / 2, h / 2 + 120, '⚙️  SETTINGS', {
+            w: 200, h: 50, bg: 0x3a2d7a, fontSize: '20px'
+        });
+        settingsBtn.on('pointerup', () => {
+            this.scene.stop('GameScene');
+            this.scene.start('SettingsScene');
+        });
+
+        const menuBtn = createButton(this, w / 2, h / 2 + 190, '🏠  MAIN MENU', {
+            w: 200, h: 50, bg: 0x442266, fontSize: '20px'
+        });
+        menuBtn.on('pointerup', () => {
+            this.scene.stop('GameScene');
+            this.scene.start('MenuScene');
+        });
+    }
+}
+
+// =========================================================================
+// 8. VICTORY SCENE
+// =========================================================================
+class VictoryScene extends Phaser.Scene {
+    constructor() { super('VictoryScene'); }
+
+    create(data) {
+        const w = GAME_W, h = GAME_H;
+        const score = data.score || 0;
+        const stars = data.stars || 0;
+        const level = data.level || 1;
+
+        // Overlay
+        const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x0f0c20, 0.85);
+        overlay.setInteractive();
+
+        AudioManager.playSFX('victory');
+        triggerHaptics();
+
+        // Title
+        const title = createText(this, w / 2, 160, 'LEVEL COMPLETE!', {
+            title: true, size: '32px', color: '#4caf50', shadow: true
+        });
+        title.setScale(0);
+        this.tweens.add({
+            targets: title, scaleX: 1, scaleY: 1,
+            duration: 400, ease: 'Back.easeOut'
+        });
+
+        // Score
+        this.time.delayedCall(300, () => {
+            createText(this, w / 2, 220, `Score: ${score}`, {
+                title: true, size: '22px', color: '#ffeb3b'
+            });
+        });
+
+        // Stars animation
+        this.time.delayedCall(500, () => {
+            for (let i = 0; i < 3; i++) {
+                this.time.delayedCall(i * 250, () => {
+                    const starChar = i < stars ? '⭐' : '☆';
+                    const starColor = i < stars ? '#ffeb3b' : '#555555';
+                    const starT = createText(this, w / 2 - 60 + i * 60, 280, starChar, {
+                        size: '40px', color: starColor
+                    });
+                    starT.setScale(0);
+                    this.tweens.add({
+                        targets: starT, scaleX: 1, scaleY: 1,
+                        duration: 300, ease: 'Back.easeOut'
+                    });
+                    if (i < stars) {
+                        AudioManager.playSFX('star');
+                    }
+                });
+            }
+        });
+
+        // Celebration particles
+        this.time.delayedCall(400, () => {
+            for (let i = 0; i < 20; i++) {
+                const px = Phaser.Math.Between(50, w - 50);
+                const py = Phaser.Math.Between(100, 320);
+                const color = COLORS[Phaser.Math.Between(0, COLORS.length - 1)];
+                const p = this.add.circle(px, py + 200, Phaser.Math.Between(3, 6), color, 0.8);
+                this.tweens.add({
+                    targets: p,
+                    y: py,
+                    alpha: 0,
+                    duration: Phaser.Math.Between(600, 1200),
+                    delay: Phaser.Math.Between(0, 400),
+                    ease: 'Power2',
+                    onComplete: () => p.destroy()
+                });
+            }
+        });
+
+        // Buttons
+        this.time.delayedCall(1200, () => {
+            const hasNext = level < LevelManager.getTotalLevels();
+
+            if (hasNext) {
+                const nextBtn = createButton(this, w / 2, 380, '▶  NEXT LEVEL', {
+                    w: 220, h: 50, bg: 0x4caf50, fontSize: '20px'
+                });
+                nextBtn.on('pointerup', () => {
+                    currentLevel = level + 1;
+                    this.scene.stop('GameScene');
+                    this.scene.start('GameScene');
+                });
+            }
+
+            const replayBtn = createButton(this, w / 2, hasNext ? 445 : 380, '🔄  REPLAY', {
+                w: 200, h: 46, bg: 0xff9800, fontSize: '18px'
+            });
+            replayBtn.on('pointerup', () => {
+                this.scene.stop('GameScene');
+                this.scene.start('GameScene');
+            });
+
+            const selectBtn = createButton(this, w / 2, hasNext ? 505 : 440, '📋  LEVEL SELECT', {
+                w: 200, h: 46, bg: 0x3a2d7a, fontSize: '18px'
+            });
+            selectBtn.on('pointerup', () => {
+                this.scene.stop('GameScene');
+                this.scene.start('LevelSelectScene');
+            });
+        });
+    }
+}
+
+// =========================================================================
+// 9. FAILURE SCENE
+// =========================================================================
+class FailureScene extends Phaser.Scene {
+    constructor() { super('FailureScene'); }
+
+    create(data) {
+        const w = GAME_W, h = GAME_H;
+        const score = data.score || 0;
+        const level = data.level || 1;
+        const remaining = data.remaining || 0;
+
+        const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x0f0c20, 0.85);
+        overlay.setInteractive();
+
+        AudioManager.playSFX('failure');
+
+        const title = createText(this, w / 2, 190, 'LEVEL FAILED', {
+            title: true, size: '34px', color: '#ff5252', shadow: true
+        });
+        title.setScale(0);
+        this.tweens.add({
+            targets: title, scaleX: 1, scaleY: 1,
+            duration: 400, ease: 'Back.easeOut'
+        });
+
+        this.time.delayedCall(300, () => {
+            createText(this, w / 2, 250, `Score: ${score}`, {
+                title: true, size: '20px', color: '#ffeb3b'
+            });
+            createText(this, w / 2, 285, `${remaining} bubbles remaining`, {
+                size: '16px', color: '#d1c4e9'
+            });
+            createText(this, w / 2, 320, 'You can do it! Try again!', {
+                size: '14px', color: '#aaaacc'
+            });
+        });
+
+        this.time.delayedCall(600, () => {
+            const retryBtn = createButton(this, w / 2, 390, '🔄  RETRY', {
+                w: 200, h: 50, bg: 0xff5722, fontSize: '20px'
+            });
+            retryBtn.on('pointerup', () => {
+                this.scene.stop('GameScene');
+                this.scene.start('GameScene');
+            });
+
+            const selectBtn = createButton(this, w / 2, 455, '📋  LEVEL SELECT', {
+                w: 200, h: 46, bg: 0x3a2d7a, fontSize: '18px'
+            });
+            selectBtn.on('pointerup', () => {
+                this.scene.stop('GameScene');
+                this.scene.start('LevelSelectScene');
+            });
+
+            const menuBtn = createButton(this, w / 2, 515, '🏠  MAIN MENU', {
+                w: 200, h: 46, bg: 0x442266, fontSize: '18px'
+            });
+            menuBtn.on('pointerup', () => {
+                this.scene.stop('GameScene');
+                this.scene.start('MenuScene');
+            });
+        });
+    }
+}
+
+// =========================================================================
+// 10. SETTINGS SCENE
+// =========================================================================
+class SettingsScene extends Phaser.Scene {
+    constructor() { super('SettingsScene'); }
+
+    create() {
+        const w = GAME_W, h = GAME_H;
+        drawBackground(this, 0x0f0c20, 0x191530);
+
+        createText(this, w / 2, 55, '⚙️  SETTINGS', {
+            title: true, size: '28px', color: '#ffffff', shadow: true
+        });
+
+        const settings = StorageManager.getSettings();
+        let yPos = 160;
+        const gap = 70;
+
+        // Music Toggle
+        this._createToggle(w / 2, yPos, '🎵  Music', settings.musicEnabled, (val) => {
+            settings.musicEnabled = val;
+            StorageManager.saveSettings(settings);
+            AudioManager.updateSettings();
+        });
+
+        // SFX Toggle
+        this._createToggle(w / 2, yPos + gap, '🔊  Sound Effects', settings.sfxEnabled, (val) => {
+            settings.sfxEnabled = val;
+            StorageManager.saveSettings(settings);
+        });
+
+        // Haptics Toggle
+        this._createToggle(w / 2, yPos + gap * 2, '📳  Vibration', settings.hapticsEnabled, (val) => {
+            settings.hapticsEnabled = val;
+            StorageManager.saveSettings(settings);
+        });
+
+        // Reset Progress
+        const resetBtn = createButton(this, w / 2, yPos + gap * 3 + 20, '⚠️  RESET PROGRESS', {
+            w: 220, h: 46, bg: 0xcc3333, fontSize: '16px'
+        });
+        resetBtn.on('pointerup', () => {
+            // Show confirmation
+            this._showResetConfirmation();
+        });
+
+        // About
+        createText(this, w / 2, h - 120, 'Bubble Shooter v2.0', {
+            size: '14px', color: '#666688'
+        });
+        createText(this, w / 2, h - 98, 'Made with Phaser 3 & ❤️', {
+            size: '12px', color: '#555577'
+        });
+
+        // Back
+        const backBtn = createButton(this, w / 2, h - 50, '← BACK', {
+            w: 140, h: 42, bg: 0x442266, fontSize: '16px'
+        });
+        backBtn.on('pointerup', () => {
+            this.scene.start('MenuScene');
+        });
+    }
+
+    _createToggle(x, y, label, initialValue, onChange) {
+        const container = this.add.container(x, y);
+
+        const labelText = createText(this, -40, 0, label, {
+            size: '18px', color: '#d1c4e9', originX: 0.5
+        });
+
+        let isOn = initialValue;
+        const toggleBg = this.add.graphics();
+        const knob = this.add.circle(0, 0, 12, 0xffffff);
+
+        const drawToggle = () => {
+            toggleBg.clear();
+            toggleBg.fillStyle(isOn ? 0x4caf50 : 0x555555, 1);
+            toggleBg.fillRoundedRect(70, -15, 60, 30, 15);
+            knob.x = isOn ? 115 : 85;
+        };
+
+        drawToggle();
+
+        const hitArea = this.add.rectangle(100, 0, 70, 40, 0x000000, 0);
+        hitArea.setInteractive({ useHandCursor: true });
+        hitArea.on('pointerdown', () => {
+            isOn = !isOn;
+            drawToggle();
+            triggerHaptics();
+            AudioManager.playSFX('button');
+            onChange(isOn);
+        });
+
+        container.add([labelText, toggleBg, knob, hitArea]);
+    }
+
+    _showResetConfirmation() {
+        const w = GAME_W, h = GAME_H;
+
+        const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7);
+        overlay.setInteractive();
+        overlay.setDepth(50);
+
+        const box = this.add.graphics();
+        box.fillStyle(0x1a1530, 1);
+        box.fillRoundedRect(w / 2 - 140, h / 2 - 80, 280, 160, 20);
+        box.lineStyle(2, 0xff5252, 0.5);
+        box.strokeRoundedRect(w / 2 - 140, h / 2 - 80, 280, 160, 20);
+        box.setDepth(51);
+
+        const msg = createText(this, w / 2, h / 2 - 40, 'Reset all progress?\nThis cannot be undone!', {
+            size: '16px', color: '#ff8888', depth: 52
+        });
+
+        const yesBtn = createButton(this, w / 2 - 60, h / 2 + 35, 'RESET', {
+            w: 100, h: 38, bg: 0xff3333, fontSize: '14px'
+        });
+        yesBtn.setDepth(52);
+        yesBtn.on('pointerup', () => {
+            StorageManager.resetAllProgress();
+            this.scene.restart();
+        });
+
+        const noBtn = createButton(this, w / 2 + 60, h / 2 + 35, 'CANCEL', {
+            w: 100, h: 38, bg: 0x444466, fontSize: '14px'
+        });
+        noBtn.setDepth(52);
+        noBtn.on('pointerup', () => {
+            overlay.destroy();
+            box.destroy();
+            msg.destroy();
+            yesBtn.destroy();
+            noBtn.destroy();
+        });
+    }
+}
+
+// =========================================================================
+// 11. HOW TO PLAY SCENE
+// =========================================================================
+class HowToPlayScene extends Phaser.Scene {
+    constructor() { super('HowToPlayScene'); }
+
+    create() {
+        const w = GAME_W, h = GAME_H;
+        drawBackground(this, 0x0f0c20, 0x191530);
+
+        createText(this, w / 2, 55, '❓  HOW TO PLAY', {
+            title: true, size: '28px', color: '#ffffff', shadow: true
+        });
+
+        const steps = [
+            { icon: '🎯', title: 'AIM', desc: 'Touch and drag to aim\nthe launcher' },
+            { icon: '🚀', title: 'SHOOT', desc: 'Release to fire\nyour bubble' },
+            { icon: '💥', title: 'MATCH 3+', desc: 'Match 3 or more\nsame-color bubbles' },
+            { icon: '⬇️', title: 'DROP', desc: 'Disconnected bubbles\nfall for bonus points' },
+            { icon: '🏆', title: 'WIN', desc: 'Clear all bubbles\nbefore running out of moves' }
+        ];
+
+        steps.forEach((step, i) => {
+            const y = 130 + i * 100;
+
+            // Card background
+            const cardBg = this.add.graphics();
+            cardBg.fillStyle(0x1a1530, 0.7);
+            cardBg.fillRoundedRect(30, y - 30, w - 60, 80, 16);
+            cardBg.lineStyle(1, 0x6e4cff, 0.2);
+            cardBg.strokeRoundedRect(30, y - 30, w - 60, 80, 16);
+
+            createText(this, 75, y - 5, step.icon, { size: '32px' });
+            createText(this, 115, y - 12, step.title, {
+                title: true, size: '18px', color: '#ff9800', originX: 0
+            });
+            createText(this, 115, y + 12, step.desc, {
+                size: '12px', color: '#bbaadd', originX: 0, originY: 0.5
+            });
+        });
+
+        // Power-ups section
+        createText(this, w / 2, h - 110, 'POWER-UPS', {
+            title: true, size: '16px', color: '#ffeb3b'
+        });
+        createText(this, w / 2, h - 82, '💣 Bomb: Destroys nearby bubbles\n🌈 Rainbow: Matches any color\n⚡ Laser: Extended aim guide', {
+            size: '11px', color: '#9988bb'
+        });
+
+        // Back
+        const backBtn = createButton(this, w / 2, h - 35, '← BACK', {
+            w: 140, h: 38, bg: 0x442266, fontSize: '16px'
+        });
+        backBtn.on('pointerup', () => {
+            this.scene.start('MenuScene');
+        });
+    }
+}
+
+// =========================================================================
+// 12. ACHIEVEMENTS SCENE
+// =========================================================================
+class AchievementsScene extends Phaser.Scene {
+    constructor() { super('AchievementsScene'); }
+
+    create() {
+        const w = GAME_W, h = GAME_H;
+        drawBackground(this, 0x0f0c20, 0x191530);
+
+        createText(this, w / 2, 55, '🏆  ACHIEVEMENTS', {
+            title: true, size: '28px', color: '#ffffff', shadow: true
+        });
+
+        const defs = [
+            { id: 'first_bubble', name: 'First Pop', desc: 'Pop your first bubble', icon: '🫧' },
+            { id: 'first_win', name: 'First Victory', desc: 'Complete your first level', icon: '🎉' },
+            { id: 'pop_100', name: 'Pop Star', desc: 'Pop 100 bubbles total', icon: '💯' },
+            { id: 'pop_1000', name: 'Bubble Master', desc: 'Pop 1,000 bubbles total', icon: '🌟' },
+            { id: 'combo_master', name: 'Combo King', desc: 'Achieve a x5 combo', icon: '🔥' },
+            { id: 'perfect_clear', name: 'Perfect Clear', desc: 'Clear every bubble in a level', icon: '✨' },
+            { id: 'levels_10', name: 'Adventurer', desc: 'Complete 10 levels', icon: '🗺️' },
+        ];
+
+        const unlocked = StorageManager.getAchievements();
+
+        defs.forEach((def, i) => {
+            const y = 115 + i * 72;
+            const isUnlocked = !!unlocked[def.id];
+
+            const cardBg = this.add.graphics();
+            cardBg.fillStyle(isUnlocked ? 0x1a2a1a : 0x151525, 0.7);
+            cardBg.fillRoundedRect(25, y - 22, w - 50, 56, 14);
+            if (isUnlocked) {
+                cardBg.lineStyle(1, 0x4caf50, 0.4);
+                cardBg.strokeRoundedRect(25, y - 22, w - 50, 56, 14);
+            }
+
+            createText(this, 58, y + 5, def.icon, { size: '24px' });
+            createText(this, 90, y - 3, def.name, {
+                title: true, size: '15px',
+                color: isUnlocked ? '#4caf50' : '#666666',
+                originX: 0
+            });
+            createText(this, 90, y + 16, def.desc, {
+                size: '11px',
+                color: isUnlocked ? '#88bb88' : '#555555',
+                originX: 0
+            });
+
+            if (isUnlocked) {
+                createText(this, w - 50, y + 5, '✅', { size: '18px' });
+            }
+        });
+
+        const backBtn = createButton(this, w / 2, h - 45, '← BACK', {
+            w: 140, h: 42, bg: 0x442266, fontSize: '16px'
+        });
+        backBtn.on('pointerup', () => {
+            this.scene.start('MenuScene');
+        });
+    }
+}
+
+// =========================================================================
+// 13. STATISTICS SCENE
+// =========================================================================
+class StatisticsScene extends Phaser.Scene {
+    constructor() { super('StatisticsScene'); }
+
+    create() {
+        const w = GAME_W, h = GAME_H;
+        drawBackground(this, 0x0f0c20, 0x191530);
+
+        createText(this, w / 2, 55, '📊  STATISTICS', {
+            title: true, size: '28px', color: '#ffffff', shadow: true
+        });
+
+        const stats = StorageManager.getStats();
+        const saveData = StorageManager.getSaveData();
+
+        const entries = [
+            { label: 'Levels Completed', value: stats.levelsCompleted, icon: '🏆' },
+            { label: 'Bubbles Popped', value: stats.bubblesPopped, icon: '🫧' },
+            { label: 'Bubbles Dropped', value: stats.bubblesDropped, icon: '⬇️' },
+            { label: 'Highest Score', value: stats.highestScore, icon: '⭐' },
+            { label: 'Highest Combo', value: `x${stats.highestCombo}`, icon: '🔥' },
+            { label: 'Perfect Clears', value: stats.perfectClears, icon: '✨' },
+            { label: 'Total Games', value: stats.totalGames, icon: '🎮' },
+            { label: 'Total Shots', value: stats.totalShots, icon: '🎯' },
+            { label: 'Total Stars', value: StorageManager.getTotalStars(), icon: '💫' },
+            { label: 'Play Time', value: this._formatTime(stats.totalPlayTimeMs), icon: '⏱️' }
+        ];
+
+        entries.forEach((entry, i) => {
+            const y = 115 + i * 52;
+
+            const cardBg = this.add.graphics();
+            cardBg.fillStyle(0x1a1530, 0.5);
+            cardBg.fillRoundedRect(30, y - 16, w - 60, 40, 10);
+
+            createText(this, 55, y + 4, entry.icon, { size: '18px' });
+            createText(this, 80, y + 4, entry.label, {
+                size: '14px', color: '#bbaadd', originX: 0
+            });
+            createText(this, w - 50, y + 4, `${entry.value}`, {
+                title: true, size: '16px', color: '#ffeb3b'
+            });
+        });
+
+        const backBtn = createButton(this, w / 2, h - 45, '← BACK', {
+            w: 140, h: 42, bg: 0x442266, fontSize: '16px'
+        });
+        backBtn.on('pointerup', () => {
+            this.scene.start('MenuScene');
+        });
+    }
+
+    _formatTime(ms) {
+        const totalSec = Math.floor((ms || 0) / 1000);
+        const hours = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        if (hours > 0) return `${hours}h ${mins}m`;
+        return `${mins}m`;
+    }
+}
+
+// =========================================================================
+// 14. CONFIGURATION AND LAUNCH
+// =========================================================================
+const config = {
+    type: Phaser.AUTO,
+    width: GAME_W,
+    height: GAME_H,
+    parent: 'game-container',
+    backgroundColor: '#0f0c20',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    physics: {
+        default: 'arcade',
+        arcade: { debug: false }
+    },
+    scene: [
+        BootScene, MenuScene, LevelSelectScene, GameScene,
+        PauseScene, VictoryScene, FailureScene,
+        SettingsScene, HowToPlayScene, AchievementsScene, StatisticsScene
+    ]
+};
+
+let gameInstance;
+
+window.onload = () => {
+    gameInstance = new Phaser.Game(config);
+};
+
+// =========================================================================
+// 15. ANDROID BRIDGE FUNCTIONS
+// =========================================================================
+
+// Called by Android back button
+function handleAndroidBack() {
+    if (!gameInstance) return;
+    const scenes = gameInstance.scene;
+
+    // If pause is active, resume game
+    if (scenes.isActive('PauseScene')) {
+        scenes.stop('PauseScene');
+        scenes.resume('GameScene');
+        return;
+    }
+    // If victory/failure is active, go to level select
+    if (scenes.isActive('VictoryScene') || scenes.isActive('FailureScene')) {
+        scenes.stop('VictoryScene');
+        scenes.stop('FailureScene');
+        scenes.stop('GameScene');
+        scenes.start('LevelSelectScene');
+        return;
+    }
+    // If in game, pause
+    if (scenes.isActive('GameScene')) {
+        scenes.pause('GameScene');
+        scenes.launch('PauseScene');
+        return;
+    }
+    // If in sub-screens, go back to menu
+    const subScreens = ['LevelSelectScene', 'SettingsScene', 'HowToPlayScene', 'AchievementsScene', 'StatisticsScene'];
+    for (const s of subScreens) {
+        if (scenes.isActive(s)) {
+            scenes.start('MenuScene');
+            return;
+        }
+    }
+    // If on menu, let Android handle it (exit app)
+    if (scenes.isActive('MenuScene')) {
+        if (typeof Android !== 'undefined' && Android.finishActivity) {
+            Android.finishActivity();
+        }
+    }
+}
+
+// Called when app is backgrounded
+function handleAppPause() {
+    if (!gameInstance) return;
+    const scenes = gameInstance.scene;
+    if (scenes.isActive('GameScene') && !scenes.isActive('PauseScene')) {
+        scenes.pause('GameScene');
+        scenes.launch('PauseScene');
+    }
+}
+
+// Called when app is foregrounded
+function handleAppResume() {
+    // Game stays paused — user must manually resume
+}

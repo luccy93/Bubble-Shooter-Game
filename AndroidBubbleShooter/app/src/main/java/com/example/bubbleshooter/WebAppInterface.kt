@@ -26,4 +26,9 @@ class WebAppInterface(private val context: Context) {
             vibrator.vibrate(50)
         }
     }
+
+    @JavascriptInterface
+    fun finishActivity() {
+        (context as? android.app.Activity)?.finish()
+    }
 }
