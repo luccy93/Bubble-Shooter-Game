@@ -7,6 +7,8 @@ import time
 from game.scenes.base import BaseScene
 from game.core.config import GameConfig
 from game.ui.widgets import Label, Button
+from game.ui.design_system import (draw_gradient_bg, draw_glass_panel,
+                                    draw_progress_bar, draw_stars)
 from game.entities.bubble import Bubble
 from game.entities.launcher import Launcher
 from game.gameplay.board import Board
@@ -24,6 +26,8 @@ class GameplayScene(BaseScene):
         # Load Level details
         self.level_data = LevelManager.get_level(self.level_id)
         self.world_data = LevelManager.get_world(self.level_data["world"])
+        self.target_scores = self.level_data.get("target_scores", [1000, 2500, 5000])
+        self._bg_surface = None
         
         # Gameplay states
         self.score = 0
@@ -170,22 +174,22 @@ class GameplayScene(BaseScene):
                 return
 
         # Powerup interactions check
-        y_pos = GameConfig.VIRTUAL_HEIGHT - 35
-        if self.bomb_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 120, y_pos):
+        y_pos = GameConfig.VIRTUAL_HEIGHT - 38
+        if self.bomb_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 110, y_pos):
             self.toggle_powerup("bomb")
             return
-        if self.lightning_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 40, y_pos):
+        if self.lightning_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 - 35, y_pos):
             self.toggle_powerup("lightning")
             return
         if self.rainbow_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 40, y_pos):
             self.toggle_powerup("rainbow")
             return
-        if self.fireball_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 120, y_pos):
+        if self.fireball_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2 + 115, y_pos):
             self.toggle_powerup("fireball")
             return
 
-        # Handle pause button
-        if self.pause_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH - 30, 24):
+        # Handle pause button on top-left of app bar
+        if self.pause_btn.handle_event(event, 28, 25):
             self.show_pause = True
             return
 
@@ -433,22 +437,25 @@ class GameplayScene(BaseScene):
             self.defeat_overlay = DefeatOverlay(self, self.score, self.level_id)
 
     def draw(self, surface):
-        # Draw background base
-        surface.fill(GameConfig.COLOR_BG)
+        # Draw gradient background base
+        if self._bg_surface is None or self._bg_surface.get_size() != surface.get_size():
+            self._bg_surface = surface.copy()
+            draw_gradient_bg(self._bg_surface, top_color=(28, 20, 52), bot_color=(15, 13, 23))
+        surface.blit(self._bg_surface, (0, 0))
 
-        # Draw Staggered Grid Playboard boundary guides
+        # Draw Staggered Grid Playboard boundary with glassmorphism style
         border_rect = pygame.Rect(
             GameConfig.to_screen_x(GameConfig.board_x),
             GameConfig.to_screen_y(GameConfig.board_y),
             int(GameConfig.BOARD_WIDTH * GameConfig.scale_x),
             int(GameConfig.BOARD_HEIGHT * GameConfig.scale_y)
         )
-        pygame.draw.rect(surface, GameConfig.COLOR_BG_LIGHT, border_rect)
-        pygame.draw.rect(surface, GameConfig.COLOR_ACCENT, border_rect, width=2)
+        draw_glass_panel(surface, border_rect, opacity=35, radius=12)
+        pygame.draw.rect(surface, GameConfig.COLOR_PRIMARY_DIM, border_rect, width=1, border_radius=12)
 
-        # Draw ceiling line
+        # Draw ceiling line (luminous)
         ceiling_y = GameConfig.to_screen_y(GameConfig.board_y)
-        pygame.draw.line(surface, (255, 255, 255, 128), (border_rect.left, ceiling_y), (border_rect.right, ceiling_y), width=2)
+        pygame.draw.line(surface, (*GameConfig.COLOR_PRIMARY_LIGHT[:3],), (border_rect.left + 4, ceiling_y), (border_rect.right - 4, ceiling_y), width=2)
 
         # Draw grid board bubbles
         for r in range(self.board.rows):
@@ -470,6 +477,20 @@ class GameplayScene(BaseScene):
 
         # Draw particles system
         ParticleSystem.draw(surface)
+
+        # Draw combo popup if combo >= 2
+        if self.combo_count >= 2:
+            combo_pulse = 1.0 + math.sin(time.time() * 8) * 0.15
+            combo_surf = pygame.Surface((140, 36), pygame.SRCALPHA)
+            combo_rect = pygame.Rect(0, 0, 140, 36)
+            draw_glass_panel(combo_surf, combo_rect, opacity=160, border_color=GameConfig.COLOR_GOLD, radius=18, glow=True)
+            Label(f"x{self.combo_count} COMBO!", size=15, color=GameConfig.COLOR_GOLD, title=True).draw(
+                combo_surf, 70, 18
+            )
+            csx = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2) - int(70 * combo_pulse)
+            csy = GameConfig.to_screen_y(GameConfig.VIRTUAL_HEIGHT / 2 - 40)
+            scaled_combo = pygame.transform.smoothscale(combo_surf, (int(140 * combo_pulse), int(36 * combo_pulse)))
+            surface.blit(scaled_combo, (csx, csy))
 
         # Render HUD Overlay elements
         self._draw_hud(surface)
@@ -495,20 +516,17 @@ class GameplayScene(BaseScene):
         elif self.active_powerup == "fireball":
             dot_color = (255, 75, 40)
 
-        # Start from launcher center
         cx = self.launcher.vx
         cy = self.launcher.vy - 20
         rad_angle = math.radians(self.launcher.angle)
         dx = math.cos(rad_angle)
-        dy = -math.sin(rad_angle)  # Pointing up
+        dy = -math.sin(rad_angle)
 
         bounces = 0
         left_limit = GameConfig.board_x + GameConfig.BUBBLE_RAD
         right_limit = GameConfig.board_x + GameConfig.BOARD_WIDTH - GameConfig.BUBBLE_RAD
 
         while bounces <= max_bounces:
-            # Find next bounce wall or ceiling collision
-            # vx(t) = cx + dx * t, vy(t) = cy + dy * t
             t_wall = float('inf')
             if dx > 0:
                 t_wall = (right_limit - cx) / dx
@@ -516,12 +534,10 @@ class GameplayScene(BaseScene):
                 t_wall = (left_limit - cx) / dx
 
             t_ceil = (GameConfig.board_y + GameConfig.BUBBLE_RAD - cy) / dy if dy != 0 else float('inf')
-
             t = min(t_wall, t_ceil)
             if t <= 0:
                 break
 
-            # Draw dotted segments
             step = 12
             steps_count = int(t / step)
             for i in range(steps_count):
@@ -530,88 +546,128 @@ class GameplayScene(BaseScene):
                 sy = GameConfig.to_screen_y(cy + dy * st)
                 pygame.draw.circle(surface, dot_color, (sx, sy), 2)
 
-            # If ceiling, terminate path
             if t_ceil <= t_wall:
                 break
 
-            # Bounce off wall, reflect X velocity
             cx = cx + dx * t
             cy = cy + dy * t
             dx = -dx
             bounces += 1
 
     def _draw_hud(self, surface):
-        """Draws screen overlay HUD indicators."""
-        # Top HUD Bar panel
-        hud_bar = pygame.Rect(0, 0, GameConfig.actual_width, int(48 * GameConfig.scale_y))
-        pygame.draw.rect(surface, (10, 8, 20, 160), hud_bar)
+        """Draws screen overlay HUD indicators with Stitch design system."""
+        # Top Glass App Bar
+        hud_h = int(50 * GameConfig.scale_y)
+        hud_bar = pygame.Rect(0, 0, GameConfig.actual_width, hud_h)
+        draw_glass_panel(surface, hud_bar, opacity=180, radius=0)
 
-        Label(f"LV {self.level_id}", size=16, color=(255, 235, 59), title=True, align="left").draw(
-            surface, 15, 24, originX=0
+        # Pause Button on left
+        self.pause_btn.draw(surface, 28, 25)
+
+        # Level Title & Progress Bar centered
+        Label(f"Level {self.level_id}", size=14, color=GameConfig.COLOR_PRIMARY_LIGHT, title=True).draw(
+            surface, GameConfig.VIRTUAL_WIDTH / 2 - 40, 16
         )
-        Label(f"⭐ {self.score}", size=16, title=True).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2 - 30, 24
+        Label(f"⭐ {self.score}", size=14, color=GameConfig.COLOR_GOLD, title=True).draw(
+            surface, GameConfig.VIRTUAL_WIDTH / 2 + 50, 16
         )
+
+        # Progress bar showing score relative to star targets
+        pbar_w = int(180 * GameConfig.scale_x)
+        pbar_h = int(10 * GameConfig.scale_y)
+        pbar_x = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2) - pbar_w // 2
+        pbar_y = int(32 * GameConfig.scale_y)
         
-        # Moves remaining alerts red if <=5
-        moves_color = GameConfig.COLOR_FAILURE if self.moves <= 5 else GameConfig.COLOR_TEXT
-        Label(f"💣 {self.moves}", size=16, color=moves_color, title=True).draw(
-            surface, GameConfig.VIRTUAL_WIDTH - 90, 24
-        )
+        max_score = max(1, self.target_scores[2] if len(self.target_scores) >= 3 else 3000)
+        fill_pct = min(1.0, self.score / max_score)
+        
+        star_positions = [
+            (self.target_scores[0] / max_score) if len(self.target_scores) > 0 else 0.33,
+            (self.target_scores[1] / max_score) if len(self.target_scores) > 1 else 0.66,
+            1.0
+        ]
+        draw_progress_bar(surface, pygame.Rect(pbar_x, pbar_y, pbar_w, pbar_h), fill_pct,
+                          star_positions=star_positions)
 
-        self.pause_btn.draw(surface, GameConfig.VIRTUAL_WIDTH - 30, 24)
-
-        # Draw objective description text centered below HUD bar (board shifted to board_y=80)
-        obj_text = ""
-        if self.objective["type"] == "clear_board":
-            obj_text = "Objective: Clear all bubbles"
-        elif self.objective["type"] == "rescue":
+        # Sub-header: Objective Chip & Shots Remaining Chip
+        # Objective chip
+        obj_text = "Clear Board"
+        obj_icon = "🫧"
+        if self.objective["type"] == "rescue":
             rescue_count = sum(1 for r in range(self.board.rows) for c in range(self.board.cols) if self.board.grid[r][c] != self.board.blank and self.board.grid[r][c].bubble_type == "rescue")
-            obj_text = f"Rescue all pets (🐱 remaining: {rescue_count})"
+            obj_text = f"Rescue: {rescue_count}"
+            obj_icon = "🐱"
         elif self.objective["type"] == "score":
             target = self.objective.get("target", 1000)
-            obj_text = f"Target Score: {target} (Current: {self.score})"
-        
-        Label(obj_text, size=12, color=GameConfig.COLOR_TEXT_MUTED).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 64)
+            obj_text = f"Target: {target}"
+            obj_icon = "⭐"
 
-        # Draw game notices (such as out-of-stock messages)
+        # Objective capsule
+        obj_w = int(140 * GameConfig.scale_x)
+        obj_h = int(24 * GameConfig.scale_y)
+        obj_x = GameConfig.to_screen_x(25)
+        obj_y = GameConfig.to_screen_y(54)
+        draw_glass_panel(surface, pygame.Rect(obj_x, obj_y, obj_w, obj_h), opacity=120, radius=12)
+        Label(f"{obj_icon} {obj_text}", size=11, color=GameConfig.COLOR_TEXT, align="left").draw(
+            surface, 32, 66, originX=0
+        )
+
+        # Shots capsule
+        shots_color = GameConfig.COLOR_FAILURE if self.moves <= 5 else GameConfig.COLOR_SUCCESS
+        shots_w = int(100 * GameConfig.scale_x)
+        shots_h = int(24 * GameConfig.scale_y)
+        shots_x = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH - 125)
+        shots_y = GameConfig.to_screen_y(54)
+        draw_glass_panel(surface, pygame.Rect(shots_x, shots_y, shots_w, shots_h), opacity=120, radius=12)
+        Label(f"Shots: {self.moves}", size=12, color=shots_color, title=True).draw(
+            surface, GameConfig.VIRTUAL_WIDTH - 75, 66
+        )
+
+        # Draw game notices (e.g. out-of-stock messages)
         if self.notice_text and time.time() - self.notice_time < 2.0:
-            Label(self.notice_text, size=13, color=GameConfig.COLOR_FAILURE, title=True, shadow=True).draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT / 2 - 100
+            notice_w = int(280 * GameConfig.scale_x)
+            notice_h = int(36 * GameConfig.scale_y)
+            notice_x = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2) - notice_w // 2
+            notice_y = GameConfig.to_screen_y(GameConfig.VIRTUAL_HEIGHT / 2 - 100)
+            draw_glass_panel(surface, pygame.Rect(notice_x, notice_y, notice_w, notice_h),
+                             opacity=180, border_color=GameConfig.COLOR_FAILURE, radius=18)
+            Label(self.notice_text, size=12, color=GameConfig.COLOR_FAILURE, title=True).draw(
+                surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT / 2 - 82
             )
 
         # Bottom Powerups Bar panel
-        p_bar = pygame.Rect(0, int((GameConfig.VIRTUAL_HEIGHT - 70) * GameConfig.scale_y), GameConfig.actual_width, int(70 * GameConfig.scale_y))
-        pygame.draw.rect(surface, (10, 8, 20, 160), p_bar)
+        pbar_rect = pygame.Rect(0, int((GameConfig.VIRTUAL_HEIGHT - 72) * GameConfig.scale_y),
+                                GameConfig.actual_width, int(72 * GameConfig.scale_y))
+        draw_glass_panel(surface, pbar_rect, opacity=180, radius=0)
 
-        # Powerups selectors label
-        Label("POWER-UPS", size=10, color=GameConfig.COLOR_TEXT_MUTED).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 60
-        )
-
-        # Next preview bubble
+        # Next preview bubble frame
         if self.next_bubble:
-            # Preview slot circular frame
-            sx = GameConfig.to_screen_x(55)
-            sy = GameConfig.to_screen_y(GameConfig.VIRTUAL_HEIGHT - 55)
+            sx = GameConfig.to_screen_x(50)
+            sy = GameConfig.to_screen_y(GameConfig.VIRTUAL_HEIGHT - 48)
             srad = int(22 * min(GameConfig.scale_x, GameConfig.scale_y))
-            pygame.draw.circle(surface, GameConfig.COLOR_BG_LIGHT, (sx, sy), srad)
-            pygame.draw.circle(surface, GameConfig.COLOR_ACCENT, (sx, sy), srad, width=1)
+            frame_rect = pygame.Rect(sx - srad, sy - srad, srad * 2, srad * 2)
+            draw_glass_panel(surface, frame_rect, opacity=100, radius=srad, border_color=GameConfig.COLOR_PRIMARY)
             
             self.next_bubble.draw(surface)
             Label("NEXT", size=9, color=GameConfig.COLOR_TEXT_MUTED).draw(
-                surface, 55, GameConfig.VIRTUAL_HEIGHT - 22
+                surface, 50, GameConfig.VIRTUAL_HEIGHT - 18
             )
 
         # Draw power-up selectors symmetrically
-        y_pos = GameConfig.VIRTUAL_HEIGHT - 35
-        self.bomb_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 120, y_pos)
-        self.lightning_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 40, y_pos)
+        y_pos = GameConfig.VIRTUAL_HEIGHT - 38
+        self.bomb_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 110, y_pos)
+        self.lightning_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 35, y_pos)
         self.rainbow_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 40, y_pos)
-        self.fireball_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 120, y_pos)
+        self.fireball_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2 + 115, y_pos)
 
         # Draw active powerup indicator
         if self.active_powerup:
-            Label(f"Active: {self.active_powerup.upper()}", size=12, color=GameConfig.COLOR_PRIMARY, title=True).draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 85
+            act_w = int(160 * GameConfig.scale_x)
+            act_h = int(24 * GameConfig.scale_y)
+            act_x = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2) - act_w // 2
+            act_y = GameConfig.to_screen_y(GameConfig.VIRTUAL_HEIGHT - 88)
+            draw_glass_panel(surface, pygame.Rect(act_x, act_y, act_w, act_h),
+                             opacity=180, border_color=GameConfig.COLOR_GOLD, radius=12, glow=True)
+            Label(f"Active: {self.active_powerup.upper()}", size=11, color=GameConfig.COLOR_GOLD, title=True).draw(
+                surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 76
             )

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bubble Quest - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-surface": "#e7e0f0",
+                      "surface-bright": "#3b3743",
+                      "on-secondary": "#3a3000",
+                      "on-error": "#690005",
+                      "on-background": "#e7e0f0",
+                      "inverse-surface": "#e7e0f0",
+                      "inverse-on-surface": "#322f3a",
+                      "surface": "#15121c",
+                      "inverse-primary": "#6d23f9",
+                      "surface-container-high": "#2c2834",
+                      "surface-tint": "#cfbdff",
+                      "secondary": "#fff9ef",
+                      "tertiary-fixed": "#62ff96",
+                      "on-surface-variant": "#cbc3d9",
+                      "error-container": "#93000a",
+                      "on-primary": "#3a0093",
+                      "on-tertiary": "#003918",
+                      "tertiary": "#00e475",
+                      "error": "#ffb4ab",
+                      "surface-variant": "#37333f",
+                      "primary": "#cfbdff",
+                      "on-tertiary-fixed": "#00210b",
+                      "on-secondary-fixed": "#221b00",
+                      "on-error-container": "#ffdad6",
+                      "on-primary-fixed": "#22005d",
+                      "tertiary-container": "#00612e",
+                      "surface-container-highest": "#37333f",
+                      "tertiary-fixed-dim": "#00e475",
+                      "secondary-fixed": "#ffe16d",
+                      "background": "#15121c",
+                      "on-primary-fixed-variant": "#5300cd",
+                      "outline": "#948da2",
+                      "surface-dim": "#15121c",
+                      "on-secondary-fixed-variant": "#544600",
+                      "on-tertiary-container": "#00e576",
+                      "surface-container-lowest": "#0f0d17",
+                      "primary-fixed-dim": "#cfbdff",
+                      "outline-variant": "#494456",
+                      "surface-container-low": "#1d1a25",
+                      "secondary-container": "#ffdb3c",
+                      "primary-fixed": "#e8ddff",
+                      "on-secondary-container": "#725f00",
+                      "surface-container": "#211e29",
+                      "on-tertiary-fixed-variant": "#005226",
+                      "primary-container": "#6200ee",
+                      "secondary-fixed-dim": "#e9c400",
+                      "on-primary-container": "#d0beff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "lg": "40px",
+                      "base": "8px",
+                      "xs": "4px",
+                      "margin-mobile": "20px",
+                      "gutter-mobile": "12px",
+                      "sm": "12px",
+                      "md": "24px"
+              },
+              "fontFamily": {
+                      "body-md": [
+                              "Be Vietnam Pro"
+                      ],
+                      "headline-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-lg": [
+                              "Be Vietnam Pro"
+                      ],
+                      "label-sm": [
+                              "Be Vietnam Pro"
+                      ],
+                      "label-lg": [
+                              "Be Vietnam Pro"
+                      ],
+                      "display-xl": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-lg": [
+                              "Plus Jakarta Sans"
+                      ]
+              },
+              "fontSize": {
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-lg": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "display-xl": [
+                              "48px",
+                              {
+                                      "lineHeight": "52px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "800"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(44, 40, 52, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+            border-left: 1px solid rgba(255, 255, 255, 0.3);
+            border-right: 1px solid rgba(207, 189, 255, 0.2);
+            border-bottom: 1px solid rgba(207, 189, 255, 0.2);
+        }
+        
+        .hero-btn {
+            background: linear-gradient(180deg, #cfbdff 0%, #6200ee 100%);
+            box-shadow: 0px 4px 0px #3a0093, 0px 0px 20px rgba(98, 0, 238, 0.6);
+            transition: all 0.1s ease;
+        }
+        
+        .hero-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0px 0px 0px #3a0093, 0px 0px 10px rgba(98, 0, 238, 0.4);
+        }
+        
+        .input-glass {
+            background: rgba(21, 18, 28, 0.6);
+            border: 1px solid rgba(148, 141, 162, 0.4);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .input-glass:focus {
+            border-color: #cfbdff;
+            box-shadow: 0 0 10px rgba(207, 189, 255, 0.3);
+            outline: none;
+        }
+        
+        .bg-animated {
+            background: radial-gradient(circle at 50% 50%, #22005d 0%, #15121c 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stars {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0));
+            background-repeat: repeat;
+            background-size: 200px 200px;
+            animation: stars 100s linear infinite;
+            opacity: 0.5;
+        }
+        
+        @keyframes stars {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-200px); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface h-screen w-screen overflow-hidden font-body-md bg-animated flex items-center justify-center p-margin-mobile">
+<div class="stars"></div>
+<div class="stars" style="background-size: 300px 300px; animation-duration: 150s; opacity: 0.3;"></div>
+<div class="glass-panel w-full max-w-md rounded-xl p-md flex flex-col gap-md relative z-10 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]">
+<!-- Header -->
+<div class="text-center mb-sm">
+<h1 class="font-display-xl text-[40px] md:text-display-xl text-primary-fixed-dim drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] mb-xs">Bubble Quest</h1>
+<p class="font-body-md text-on-surface-variant">Enter the magical realm</p>
+</div>
+<!-- Form -->
+<form class="flex flex-col gap-sm">
+<div class="flex flex-col gap-xs">
+<label class="font-label-lg text-label-lg text-on-surface-variant" for="email">Email</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant">mail</span>
+<input class="input-glass w-full rounded-lg h-12 pl-[44px] pr-sm font-body-md text-on-surface placeholder:text-outline" id="email" placeholder="adventurer@quest.com" type="email"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<div class="flex justify-between items-center">
+<label class="font-label-lg text-label-lg text-on-surface-variant" for="password">Password</label>
+<a class="font-label-sm text-label-sm text-primary hover:text-primary-fixed transition-colors" href="#">Forgot Password?</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant">lock</span>
+<input class="input-glass w-full rounded-lg h-12 pl-[44px] pr-sm font-body-md text-on-surface placeholder:text-outline" id="password" placeholder="••••••••" type="password"/>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-sm mt-sm">
+<button class="hero-btn w-full h-14 rounded-lg flex items-center justify-center font-headline-md text-headline-md text-secondary" type="button">
+                    Sign In
+                </button>
+<div class="flex items-center gap-sm my-xs">
+<div class="h-px bg-outline-variant flex-1"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">OR</span>
+<div class="h-px bg-outline-variant flex-1"></div>
+</div>
+<button class="w-full h-12 rounded-lg border border-outline-variant hover:bg-surface-variant/50 transition-colors flex items-center justify-center font-label-lg text-label-lg text-primary" type="button">
+                    Create New Account
+                </button>
+</div>
+</form>
+</div>
+</body></html>

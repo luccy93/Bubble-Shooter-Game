@@ -1,4 +1,4 @@
-# game/entities/bubble.py - Bubble Entity wrapping colors, types, positions, and physics
+# game/entities/bubble.py - Bubble Entity with Stitch 3D sphere gradient rendering and physics
 
 import pygame
 import math
@@ -12,7 +12,7 @@ class Bubble(pygame.sprite.Sprite):
         self.row = row
         self.col = col
         self.radius = GameConfig.BUBBLE_RAD
-        self.bubble_type = bubble_type  # "normal", "bomb", "rainbow"
+        self.bubble_type = bubble_type  # "normal", "bomb", "rainbow", "lightning", "fireball", "rescue", "obstacle"
         
         # Physics attributes
         self.speed = 10
@@ -48,7 +48,6 @@ class Bubble(pygame.sprite.Sprite):
             dx = self.xcalc(self.angle)
             dy = self.ycalc(self.angle)
         else:
-            # Angle > 90
             dx = self.xcalc(180 - self.angle) * -1
             dy = self.ycalc(180 - self.angle)
 
@@ -63,26 +62,45 @@ class Bubble(pygame.sprite.Sprite):
         return math.sin(math.radians(angle)) * self.speed * -1
 
     def draw(self, surface):
-        """Draws a premium 3D radial-glossy bubble on the screen."""
-        # 0. Sync colors for special types
+        """Draws a premium 3D radial-gradient glossy bubble matching the Stitch design."""
         symbol = None
         symbol_color = (255, 255, 255)
         
+        # Determine gradient colors
+        grad_start = None
+        grad_end = None
+
         if self.bubble_type == "bomb":
-            symbol = "B"
+            symbol = "💣"
+            grad_start, grad_end = (255, 140, 0), (180, 50, 0)
             self.color = (255, 102, 0)
         elif self.bubble_type == "lightning":
-            symbol = "L"
+            symbol = "⚡"
+            grad_start, grad_end = (220, 130, 240), (130, 40, 160)
             self.color = (186, 104, 200)
         elif self.bubble_type == "fireball":
-            symbol = "F"
+            symbol = "🔥"
+            grad_start, grad_end = (255, 120, 50), (200, 30, 20)
             self.color = (255, 75, 40)
         elif self.bubble_type == "rescue":
             symbol = "🐱"
+            grad_start, grad_end = (255, 180, 210), (200, 100, 140)
             self.color = (244, 143, 177)
         elif self.bubble_type == "obstacle":
             symbol = "🧱"
+            grad_start, grad_end = (160, 160, 160), (70, 70, 70)
             self.color = (120, 120, 120)
+        elif self.bubble_type == "rainbow":
+            pass
+        else:
+            # Match standard bubble colors to Stitch gradient pairs
+            for idx, col in enumerate(GameConfig.BUBBLE_COLORS):
+                if self.color == col and idx < len(GameConfig.BUBBLE_GRADIENTS):
+                    grad_start, grad_end = GameConfig.BUBBLE_GRADIENTS[idx]
+                    break
+            if grad_start is None:
+                grad_start = tuple(min(255, c + 40) for c in self.color)
+                grad_end = tuple(max(0, c - 40) for c in self.color)
 
         sx = GameConfig.to_screen_x(self.vx)
         sy = GameConfig.to_screen_y(self.vy)
@@ -91,35 +109,74 @@ class Bubble(pygame.sprite.Sprite):
         if srad <= 0:
             return
 
-        # 1. Outer drop shadow
-        shadow_surf = pygame.Surface((srad * 2 + 4, srad * 2 + 4), pygame.SRCALPHA)
-        pygame.draw.circle(shadow_surf, (0, 0, 0, 45), (srad + 1, srad + 2), srad - 1)
-        surface.blit(shadow_surf, (sx - srad - 1, sy - srad - 2))
+        # 1. Outer soft drop shadow
+        shadow_surf = pygame.Surface((srad * 2 + 6, srad * 2 + 6), pygame.SRCALPHA)
+        pygame.draw.circle(shadow_surf, (0, 0, 0, 55), (srad + 3, srad + 4), srad - 1)
+        surface.blit(shadow_surf, (sx - srad - 3, sy - srad - 4))
 
-        # 2. Main Bubble Circle (anti-aliased)
+        # 2. Main Bubble Body
         if self.bubble_type == "rainbow":
-            # Procedural rainbow drawing
+            # Procedural multi-arc rainbow sphere
             pygame.gfxdraw.filled_circle(surface, sx, sy, srad, (255, 255, 255))
-            pygame.gfxdraw.aacircle(surface, sx, sy, srad, (200, 200, 200))
-            # Nested colorful arcs
-            for r_offset, arc_color in zip([2, 5, 8], [(175, 82, 222), (0, 122, 255), (255, 59, 48)]):
-                if srad - r_offset > 0:
-                    pygame.gfxdraw.aacircle(surface, sx, sy, srad - r_offset, arc_color)
+            pygame.gfxdraw.aacircle(surface, sx, sy, srad, (220, 220, 240))
+            arcs = [
+                (srad, (175, 82, 222)),
+                (int(srad * 0.8), (0, 122, 255)),
+                (int(srad * 0.6), (52, 199, 89)),
+                (int(srad * 0.4), (255, 204, 0)),
+                (int(srad * 0.2), (255, 59, 48))
+            ]
+            for r_val, arc_col in arcs:
+                if r_val > 0:
+                    pygame.gfxdraw.filled_circle(surface, sx, sy, r_val, arc_col)
+                    pygame.gfxdraw.aacircle(surface, sx, sy, r_val, (255, 255, 255))
         else:
-            pygame.gfxdraw.filled_circle(surface, sx, sy, srad, self.color)
-            pygame.gfxdraw.aacircle(surface, sx, sy, srad, (100, 100, 100))
+            # 3D Sphere with radial gradient
+            sphere_surf = pygame.Surface((srad * 2, srad * 2), pygame.SRCALPHA)
+            
+            # Base dark tone
+            pygame.draw.circle(sphere_surf, grad_end, (srad, srad), srad)
+            
+            # Light source offset towards top-left (30% 30%)
+            lx = int(srad * 0.7)
+            ly = int(srad * 0.65)
+            
+            # Layered radial gradient circles
+            steps = max(4, srad // 2)
+            for i in range(steps, 0, -1):
+                ratio = i / steps
+                r_col = (
+                    int(grad_end[0] + (grad_start[0] - grad_end[0]) * ratio),
+                    int(grad_end[1] + (grad_start[1] - grad_end[1]) * ratio),
+                    int(grad_end[2] + (grad_start[2] - grad_end[2]) * ratio)
+                )
+                cur_r = int(srad * ratio)
+                cur_cx = int(srad + (lx - srad) * (1 - ratio))
+                cur_cy = int(srad + (ly - srad) * (1 - ratio))
+                if cur_r > 0:
+                    pygame.draw.circle(sphere_surf, r_col, (cur_cx, cur_cy), cur_r)
+            
+            # 3. Specular Highlight (gloss gleam at top-left)
+            gleam_rad = max(2, int(srad * 0.35))
+            gleam_x = int(srad * 0.65)
+            gleam_y = int(srad * 0.55)
+            gleam_surf = pygame.Surface((srad * 2, srad * 2), pygame.SRCALPHA)
+            pygame.draw.circle(gleam_surf, (255, 255, 255, 140), (gleam_x, gleam_y), gleam_rad)
+            # Secondary micro gleam
+            pygame.draw.circle(gleam_surf, (255, 255, 255, 80), (gleam_x + 3, gleam_y + 3), max(1, gleam_rad // 2))
+            sphere_surf.blit(gleam_surf, (0, 0))
 
-            # 3. Inner radial gloss highlight (3D sphere effect)
-            gloss_surf = pygame.Surface((srad * 2, srad * 2), pygame.SRCALPHA)
-            gx, gy = int(srad * 0.7), int(srad * 0.6)
-            for r in range(1, int(srad * 0.7)):
-                alpha = int(140 * (1 - r / (srad * 0.7)))
-                pygame.draw.circle(gloss_surf, (255, 255, 255, alpha), (gx, gy), r)
-            surface.blit(gloss_surf, (sx - srad, sy - srad))
+            # 4. Subtle bottom-right rim light
+            rim_x = int(srad * 1.3)
+            rim_y = int(srad * 1.3)
+            pygame.draw.circle(sphere_surf, (255, 255, 255, 25), (rim_x, rim_y), max(1, srad // 3))
 
-            # Draw symbol centered inside special bubbles
+            surface.blit(sphere_surf, (sx - srad, sy - srad))
+            pygame.gfxdraw.aacircle(surface, sx, sy, srad, (255, 255, 255, 40))
+
+            # Draw symbol for special bubbles
             if symbol:
-                font_name = 'Segoe UI Emoji' if self.bubble_type == "rescue" else 'Arial'
+                font_name = 'Segoe UI Emoji' if self.bubble_type in ["rescue", "bomb", "lightning", "fireball", "obstacle"] else 'Arial'
                 try:
                     font = pygame.font.SysFont(font_name, int(srad * 1.1), bold=True)
                 except Exception:

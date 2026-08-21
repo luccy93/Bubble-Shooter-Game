@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Bubble Quest Gameplay HUD</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&amp;family=Be+Vietnam+Pro:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "on-surface": "#e7e0f0",
+                "surface-bright": "#3b3743",
+                "on-secondary": "#3a3000",
+                "on-error": "#690005",
+                "on-background": "#e7e0f0",
+                "inverse-surface": "#e7e0f0",
+                "inverse-on-surface": "#322f3a",
+                "surface": "#15121c",
+                "inverse-primary": "#6d23f9",
+                "surface-container-high": "#2c2834",
+                "surface-tint": "#cfbdff",
+                "secondary": "#fff9ef",
+                "tertiary-fixed": "#62ff96",
+                "on-surface-variant": "#cbc3d9",
+                "error-container": "#93000a",
+                "on-primary": "#3a0093",
+                "on-tertiary": "#003918",
+                "tertiary": "#00e475",
+                "error": "#ffb4ab",
+                "surface-variant": "#37333f",
+                "primary": "#cfbdff",
+                "on-tertiary-fixed": "#00210b",
+                "on-secondary-fixed": "#221b00",
+                "on-error-container": "#ffdad6",
+                "on-primary-fixed": "#22005d",
+                "tertiary-container": "#00612e",
+                "surface-container-highest": "#37333f",
+                "tertiary-fixed-dim": "#00e475",
+                "secondary-fixed": "#ffe16d",
+                "background": "#15121c",
+                "on-primary-fixed-variant": "#5300cd",
+                "outline": "#948da2",
+                "surface-dim": "#15121c",
+                "on-secondary-fixed-variant": "#544600",
+                "on-tertiary-container": "#00e576",
+                "surface-container-lowest": "#0f0d17",
+                "primary-fixed-dim": "#cfbdff",
+                "outline-variant": "#494456",
+                "surface-container-low": "#1d1a25",
+                "secondary-container": "#ffdb3c",
+                "primary-fixed": "#e8ddff",
+                "on-secondary-container": "#725f00",
+                "surface-container": "#211e29",
+                "on-tertiary-fixed-variant": "#005226",
+                "primary-container": "#6200ee",
+                "secondary-fixed-dim": "#e9c400",
+                "on-primary-container": "#d0beff"
+        },
+        "borderRadius": {
+                "DEFAULT": "1rem",
+                "lg": "2rem",
+                "xl": "3rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "lg": "40px",
+                "base": "8px",
+                "xs": "4px",
+                "margin-mobile": "20px",
+                "gutter-mobile": "12px",
+                "sm": "12px",
+                "md": "24px"
+        },
+        "fontFamily": {
+                "body-md": [
+                        "Be Vietnam Pro"
+                ],
+                "headline-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-lg": [
+                        "Be Vietnam Pro"
+                ],
+                "label-sm": [
+                        "Be Vietnam Pro"
+                ],
+                "label-lg": [
+                        "Be Vietnam Pro"
+                ],
+                "display-xl": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg": [
+                        "Plus Jakarta Sans"
+                ]
+        },
+        "fontSize": {
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "500"
+                        }
+                ],
+                "label-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-lg": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "700"
+                        }
+                ],
+                "display-xl": [
+                        "48px",
+                        {
+                                "lineHeight": "52px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "fontWeight": "700"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+  /* Base Magical Theme Overrides */
+  body {
+    background: radial-gradient(circle at top, #2a1b4d 0%, #15121c 100%);
+    color: #e7e0f0;
+    overflow: hidden;
+  }
+  
+  /* Utilities for glass panels and glowing effects */
+  .glass-panel {
+    background: rgba(44, 40, 52, 0.4);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-left: 1px solid rgba(255, 255, 255, 0.3);
+    border-right: 1px solid rgba(207, 189, 255, 0.2);
+    border-bottom: 1px solid rgba(207, 189, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  }
+  
+  .glow-primary {
+    box-shadow: 0 0 15px rgba(207, 189, 255, 0.5);
+  }
+  
+  .glow-accent {
+    box-shadow: 0 0 20px rgba(0, 228, 117, 0.6);
+  }
+
+  /* 3D Button Styles */
+  .btn-3d {
+    position: relative;
+    transition: transform 0.1s;
+    box-shadow: 0 4px 0 0 rgba(0,0,0,0.4);
+  }
+  .btn-3d:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 0 rgba(0,0,0,0.4);
+  }
+
+  /* Bubble Styles */
+  .bubble {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    position: relative;
+    box-shadow: inset -4px -4px 10px rgba(0,0,0,0.5), inset 4px 4px 10px rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  
+  .bubble::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 10px;
+    width: 15px;
+    height: 8px;
+    background: rgba(255,255,255,0.7);
+    border-radius: 50%;
+    transform: rotate(-45deg);
+  }
+
+  .bubble-red { background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b); }
+  .bubble-blue { background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe); }
+  .bubble-green { background: radial-gradient(circle at 30% 30%, #43e97b, #38f9d7); }
+  .bubble-yellow { background: radial-gradient(circle at 30% 30%, #f6d365, #fda085); }
+  .bubble-purple { background: radial-gradient(circle at 30% 30%, #b8c6db, #f5f7fa); }
+
+  /* Grid Layout for Bubbles */
+  .bubble-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 40px);
+    gap: 2px;
+    justify-content: center;
+    padding-top: 20px;
+  }
+  
+  /* Staggered Rows */
+  .bubble-grid .row-even {
+    transform: translateX(21px); /* Half bubble + gap */
+  }
+
+  /* Aiming Line */
+  .aim-line {
+    position: absolute;
+    width: 4px;
+    height: 150px;
+    background: repeating-linear-gradient(to top, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 5px, transparent 5px, transparent 15px);
+    bottom: 120px;
+    left: 50%;
+    transform-origin: bottom center;
+    transform: translateX(-50%) rotate(-15deg);
+    z-index: 10;
+    pointer-events: none;
+    filter: drop-shadow(0 0 5px rgba(255,255,255,0.8));
+  }
+  
+  /* Progress Bar Glow */
+  .progress-fill {
+    background: linear-gradient(90deg, #00e475, #62ff96);
+    position: relative;
+  }
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    background: rgba(255,255,255,0.8);
+    filter: blur(2px);
+  }
+</style>
+</head>
+<body class="flex flex-col h-screen w-full select-none touch-none">
+<!-- Background Image & Gradient overlay -->
+<div class="absolute inset-0 bg-cover bg-center w-full h-full -z-10 opacity-30" data-alt="A magical fantasy forest at night, deep purple and indigo hues, glowing crystals and fireflies, soft ethereal lighting, enchanted atmosphere, blurred out of focus for a UI background, 3D style." style="background-image: url('https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg')"></div>
+<!-- Top Area: HUD (Based on TopAppBar blueprint) -->
+<header class="glass-panel w-full px-margin-mobile pt-safe pb-3 flex flex-col gap-sm z-50">
+<div class="flex justify-between items-center w-full">
+<!-- Pause / Menu -->
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center btn-3d text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<!-- Level & Score Progress -->
+<div class="flex-1 flex flex-col items-center px-md gap-1">
+<h1 class="font-headline-md text-headline-md-mobile text-primary font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] tracking-tight">Level 42</h1>
+<!-- Progress Bar -->
+<div class="w-full h-4 bg-surface-container-highest rounded-full overflow-hidden border border-outline-variant/30 shadow-inner relative">
+<div class="progress-fill h-full w-[65%] rounded-full"></div>
+<!-- Stars on progress bar -->
+<div class="absolute inset-0 flex justify-evenly items-center pointer-events-none">
+<span class="material-symbols-outlined text-secondary-fixed text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-fixed text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-surface-variant text-[14px]">star</span>
+</div>
+</div>
+</div>
+<!-- Settings -->
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center btn-3d text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+</button>
+</div>
+<!-- Objective Tracker & Shots -->
+<div class="flex justify-between items-center px-2 mt-1">
+<div class="flex items-center gap-2 glass-panel rounded-lg px-3 py-1">
+<div class="bubble bubble-red w-6 h-6"></div>
+<span class="font-label-lg text-label-lg text-on-surface">x 12</span>
+<div class="bubble bubble-blue w-6 h-6 ml-2"></div>
+<span class="font-label-lg text-label-lg text-on-surface">x 8</span>
+</div>
+<div class="flex flex-col items-center justify-center glass-panel rounded-lg px-4 py-1">
+<span class="font-headline-md text-headline-md-mobile text-tertiary-fixed font-bold leading-none">24</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider text-[10px]">Shots</span>
+</div>
+</div>
+</header>
+<!-- Center: Gameplay Area (Bubble Grid) -->
+<main class="flex-1 relative overflow-hidden flex flex-col items-center">
+<!-- Bubble Grid -->
+<div class="bubble-grid w-full h-full">
+<!-- Row 1 -->
+<div class="bubble bubble-red"></div>
+<div class="bubble bubble-blue"></div>
+<div class="bubble bubble-blue"></div>
+<div class="bubble bubble-green"></div>
+<div class="bubble bubble-yellow"></div>
+<div class="bubble bubble-red"></div>
+<div class="bubble bubble-green"></div>
+<div class="bubble bubble-purple"></div>
+<div class="bubble bubble-yellow"></div>
+<!-- Row 2 (Staggered) -->
+<div class="bubble bubble-red row-even"></div>
+<div class="bubble bubble-red row-even"></div>
+<div class="bubble bubble-green row-even"></div>
+<div class="bubble bubble-yellow row-even"></div>
+<div class="bubble bubble-yellow row-even"></div>
+<div class="bubble bubble-purple row-even"></div>
+<div class="bubble bubble-green row-even"></div>
+<div class="bubble bubble-blue row-even"></div>
+<!-- Row 3 -->
+<div class="bubble bubble-green"></div>
+<div class="bubble bubble-red"></div>
+<div class="bubble bubble-yellow"></div>
+<div class="bubble bubble-blue"></div>
+<div class="bubble bubble-purple"></div>
+<div class="bubble bubble-purple"></div>
+<div class="bubble bubble-red"></div>
+<div class="bubble bubble-green"></div>
+<div class="bubble bubble-yellow"></div>
+<!-- Row 4 (Staggered) -->
+<div class="bubble bubble-yellow row-even"></div>
+<div class="bubble bubble-green row-even"></div>
+<div class="bubble bubble-blue row-even"></div>
+<div class="bubble bubble-blue row-even"></div>
+<div class="bubble bubble-red row-even"></div>
+</div></main></body></html>

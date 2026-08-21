@@ -1282,6 +1282,7 @@
         },
 
         snapProjectile() {
+            // Find closest grid slot
             let bestR = 0, bestC = 0, bestDist = 9999;
             for (let r = 0; r < this.rows; r++) {
                 const colsInRow = (r % 2 === 0) ? this.cols : this.cols - 1;
@@ -1302,6 +1303,7 @@
             this.grid[bestR][bestC] = { color: this.projectile.color, alive: true };
             Sound.playPop();
 
+            // Match 3+ BFS check
             this.checkMatches(bestR, bestC, this.projectile.color);
             this.prepareProjectile();
             this.checkWinLoss();
@@ -1317,6 +1319,7 @@
                 const [r, c] = queue.shift();
                 matches.push([r, c]);
 
+                // Neighbors
                 const isEven = (r % 2 === 0);
                 const neighbors = isEven ?
                     [[-1, -1], [-1, 0], [0, -1], [0, 1], [1, -1], [1, 0]] :
@@ -1357,6 +1360,7 @@
             }
 
             if (totalAlive === 0) {
+                // Victory!
                 Sound.playVictory();
                 App.save.stats.completed++;
                 App.save.coins += 50;
@@ -1367,6 +1371,7 @@
                 document.getElementById('victory-score').innerText = this.score;
                 document.getElementById('modal-victory').classList.add('active');
             } else if (this.moves <= 0) {
+                // Defeat!
                 document.getElementById('defeat-score').innerText = this.score;
                 document.getElementById('modal-defeat').classList.add('active');
             }
@@ -1375,6 +1380,7 @@
         render() {
             this.ctx.clearRect(0, 0, this.width, this.height);
 
+            // Ceiling line
             this.ctx.strokeStyle = '#cfbdff';
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
@@ -1382,6 +1388,7 @@
             this.ctx.lineTo(this.width - 10, 8);
             this.ctx.stroke();
 
+            // Grid Bubbles
             for (let r = 0; r < this.rows; r++) {
                 const colsInRow = (r % 2 === 0) ? this.cols : this.cols - 1;
                 for (let c = 0; c < colsInRow; c++) {
@@ -1394,12 +1401,15 @@
                 }
             }
 
+            // Projectile
             if (this.projectile) {
                 this.draw3DBubble(this.projectile.x, this.projectile.y, this.projectile.color, this.projectile.radius);
             } else if (this.currentBubble) {
+                // Ready bubble at launcher
                 this.draw3DBubble(this.currentBubble.x, this.currentBubble.y, this.currentBubble.color, this.currentBubble.radius);
             }
 
+            // Aiming Laser Pointer Line
             if (this.aiming && !this.projectile) {
                 const rad = this.launcherAngle * Math.PI / 180;
                 const lx = this.width / 2 + Math.cos(rad) * 90;
@@ -1417,11 +1427,13 @@
         },
 
         draw3DBubble(x, y, color, rad) {
+            // Drop shadow
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
             this.ctx.beginPath();
             this.ctx.arc(x + 2, y + 3, rad, 0, Math.PI * 2);
             this.ctx.fill();
 
+            // Main Sphere with Radial Gradient
             const grad = this.ctx.createRadialGradient(x - rad * 0.3, y - rad * 0.3, 2, x, y, rad);
             grad.addColorStop(0, '#ffffff');
             grad.addColorStop(0.3, color);
@@ -1432,6 +1444,7 @@
             this.ctx.arc(x, y, rad, 0, Math.PI * 2);
             this.ctx.fill();
 
+            // Specular Gleam Highlight
             this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
             this.ctx.beginPath();
             this.ctx.arc(x - rad * 0.35, y - rad * 0.35, rad * 0.25, 0, Math.PI * 2);
@@ -1445,6 +1458,7 @@
         }
     };
 
+    // Auto-boot unified game application on load
     window.addEventListener('DOMContentLoaded', () => App.init());
     </script>
 </body>

@@ -1,24 +1,26 @@
-# game/scenes/statistics.py - Stats display screen
+# game/scenes/statistics.py - Stats display screen with Stitch design
 
 import pygame
 from game.scenes.base import BaseScene
 from game.core.config import GameConfig
 from game.ui.widgets import Label, Button
+from game.ui.design_system import draw_gradient_bg, draw_glass_panel
 from game.storage.save_manager import SaveManager
 
 class StatisticsScene(BaseScene):
     def __init__(self, manager):
         super().__init__(manager)
         
-        self.back_btn = Button("← BACK", w=140, h=40, bg_color=GameConfig.COLOR_BG_LIGHT)
-        save_data = SaveManager.load_game()
-        self.stats = save_data["stats"]
+        self.back_btn = Button("← BACK", w=140, h=40, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        profile = SaveManager.get_profile()
+        self.stats = profile["stats"]
         
         # Calculate total stars
         total_stars = 0
-        for val in save_data.get("stars", {}).values():
+        for val in profile.get("stars", {}).values():
             total_stars += val
         self.total_stars = total_stars
+        self._bg_surface = None
 
     def _format_time(self, seconds):
         if seconds <= 0:
@@ -42,8 +44,14 @@ class StatisticsScene(BaseScene):
         pass
 
     def draw(self, surface):
-        surface.fill(GameConfig.COLOR_BG)
-        Label("STATISTICS", size=24, title=True).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 60)
+        if self._bg_surface is None or self._bg_surface.get_size() != surface.get_size():
+            self._bg_surface = surface.copy()
+            draw_gradient_bg(self._bg_surface, top_color=(35, 22, 65), bot_color=(15, 13, 23))
+        surface.blit(self._bg_surface, (0, 0))
+
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        Label("STATISTICS", size=24, title=True, glow=True,
+              color=GameConfig.COLOR_PRIMARY_LIGHT).draw(surface, cx, 60)
 
         entries = [
             ("🎮 Games Played", self.stats["games_played"]),
@@ -57,21 +65,20 @@ class StatisticsScene(BaseScene):
         ]
 
         for i, (label, val) in enumerate(entries):
-            cy = 135 + i * 54
+            cy = 135 + i * 56
             
-            # Draw row background line
-            scx = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2)
-            scy = GameConfig.to_screen_y(cy)
-            sw = int(340 * GameConfig.scale_x)
-            sh = int(40 * GameConfig.scale_y)
-            row_rect = pygame.Rect(scx - sw // 2, scy - sh // 2, sw, sh)
-            pygame.draw.rect(surface, GameConfig.COLOR_BG_LIGHT, row_rect, border_radius=8)
+            row_w = int(360 * GameConfig.scale_x)
+            row_h = int(44 * GameConfig.scale_y)
+            row_x = GameConfig.to_screen_x(cx) - row_w // 2
+            row_y = GameConfig.to_screen_y(cy) - row_h // 2
+            draw_glass_panel(surface, pygame.Rect(row_x, row_y, row_w, row_h),
+                             opacity=70, radius=10)
 
             Label(label, size=14, color=GameConfig.COLOR_TEXT_MUTED, align="left").draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2 - 150, cy, originX=0
+                surface, cx - 150, cy, originX=0
             )
-            Label(str(val), size=16, color=GameConfig.COLOR_PRIMARY, title=True).draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2 + 130, cy, originX=1
+            Label(str(val), size=16, color=GameConfig.COLOR_PRIMARY_LIGHT, title=True).draw(
+                surface, cx + 130, cy, originX=1
             )
 
-        self.back_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 60)
+        self.back_btn.draw(surface, cx, GameConfig.VIRTUAL_HEIGHT - 60)

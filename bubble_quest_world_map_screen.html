@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bubble Quest - World Map</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface": "#e7e0f0",
+                    "surface-bright": "#3b3743",
+                    "on-secondary": "#3a3000",
+                    "on-error": "#690005",
+                    "on-background": "#e7e0f0",
+                    "inverse-surface": "#e7e0f0",
+                    "inverse-on-surface": "#322f3a",
+                    "surface": "#15121c",
+                    "inverse-primary": "#6d23f9",
+                    "surface-container-high": "#2c2834",
+                    "surface-tint": "#cfbdff",
+                    "secondary": "#fff9ef",
+                    "tertiary-fixed": "#62ff96",
+                    "on-surface-variant": "#cbc3d9",
+                    "error-container": "#93000a",
+                    "on-primary": "#3a0093",
+                    "on-tertiary": "#003918",
+                    "tertiary": "#00e475",
+                    "error": "#ffb4ab",
+                    "surface-variant": "#37333f",
+                    "primary": "#cfbdff",
+                    "on-tertiary-fixed": "#00210b",
+                    "on-secondary-fixed": "#221b00",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-fixed": "#22005d",
+                    "tertiary-container": "#00612e",
+                    "surface-container-highest": "#37333f",
+                    "tertiary-fixed-dim": "#00e475",
+                    "secondary-fixed": "#ffe16d",
+                    "background": "#15121c",
+                    "on-primary-fixed-variant": "#5300cd",
+                    "outline": "#948da2",
+                    "surface-dim": "#15121c",
+                    "on-secondary-fixed-variant": "#544600",
+                    "on-tertiary-container": "#00e576",
+                    "surface-container-lowest": "#0f0d17",
+                    "primary-fixed-dim": "#cfbdff",
+                    "outline-variant": "#494456",
+                    "surface-container-low": "#1d1a25",
+                    "secondary-container": "#ffdb3c",
+                    "primary-fixed": "#e8ddff",
+                    "on-secondary-container": "#725f00",
+                    "surface-container": "#211e29",
+                    "on-tertiary-fixed-variant": "#005226",
+                    "primary-container": "#6200ee",
+                    "secondary-fixed-dim": "#e9c400",
+                    "on-primary-container": "#d0beff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "40px",
+                    "base": "8px",
+                    "xs": "4px",
+                    "margin-mobile": "20px",
+                    "gutter-mobile": "12px",
+                    "sm": "12px",
+                    "md": "24px"
+            },
+            "fontFamily": {
+                    "body-md": ["Be Vietnam Pro"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "body-lg": ["Be Vietnam Pro"],
+                    "label-sm": ["Be Vietnam Pro"],
+                    "label-lg": ["Be Vietnam Pro"],
+                    "display-xl": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "500"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                    "display-xl": ["48px", {"lineHeight": "52px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>/* Custom styles for 3D and glow effects */
+.glass-panel {
+    background: rgba(44, 40, 52, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-left: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(207, 189, 255, 0.2);
+    border-right: 1px solid rgba(207, 189, 255, 0.2)
+    }
+.level-node-locked {
+    background: linear-gradient(145deg, #37333f, #211e29);
+    box-shadow: 0 4px 0 #15121c, inset 0 2px 4px rgba(255, 255, 255, 0.1)
+    }
+.level-node-completed {
+    background: linear-gradient(145deg, #00e475, #00612e);
+    box-shadow: 0 4px 0 #003918, inset 0 2px 4px rgba(255, 255, 255, 0.4)
+    }
+.level-node-active {
+    background: linear-gradient(145deg, #cfbdff, #6200ee);
+    box-shadow: 0 6px 0 #3a0093, 0 0 20px rgba(207, 189, 255, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+    animation: pulse-glow 2s infinite alternate
+    }
+.currency-chip {
+    background: linear-gradient(145deg, rgba(255, 219, 60, 0.9), rgba(233, 196, 0, 0.9));
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3)
+    }
+.lives-chip {
+    background: linear-gradient(145deg, rgba(255, 180, 171, 0.9), rgba(147, 0, 10, 0.9));
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3)
+    }
+@keyframes pulse-glow {
+    0% {
+        box-shadow: 0 6px 0 #3a0093, 0 0 10px rgba(207, 189, 255, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+        transform: scale(1);
+        } 100% {
+        box-shadow: 0 6px 0 #3a0093, 0 0 30px rgba(207, 189, 255, 0.8), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+        transform: scale(1.05);
+        }
+    }
+@keyframes float {
+    0% {
+        transform: translateY(0px);
+        } 50% {
+        transform: translateY(-10px);
+        } 100% {
+        transform: translateY(0px);
+        }
+    }
+.floating {
+    animation: float 4s ease-in-out infinite
+    }
+/* Map background setup */
+.map-container {
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuD0B-BdRkzAsHCtr7GkEu7GZ33Xk87Hp6MNrlwc5l74FIOF_Xz-hF3mE9QhgN5h6gBQzgqr_5hBBPky_HChzntJ45-miucRihfHpvgaUFoO74mfLM_rLHhAE2hylg5m15MH0fI_r0jUIu82sIlYg5-2UnSNHUghQuTuardtxHeLuSQx3U64TcIkMuh-unQuzbNBiA0PomfU26_mFXZ89cwRKNCdVFC4DWFD_RO0YnEeEdXoyh6mpCyDOw);
+    background-size: cover;
+    background-position: center bottom;
+    height: 200vh;
+    /* Make it scrollable */
+    }</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden antialiased">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full px-margin-mobile pt-safe border-b border-white/30 backdrop-blur-md shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] flex justify-between items-center h-16 z-50 bg-surface/40 dark:bg-surface/40">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-2xl">account_circle</span>
+<span class="font-headline-md text-headline-md-mobile text-primary-fixed-dim drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">Bubble Quest</span>
+</div>
+<!-- Floating HUD Currency -->
+<div class="flex gap-sm">
+<div class="lives-chip flex items-center rounded-full px-3 py-1 border border-white/20">
+<span class="material-symbols-outlined text-on-error mr-1" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="font-label-lg text-label-lg text-white drop-shadow-md">5</span>
+</div>
+<div class="currency-chip flex items-center rounded-full px-3 py-1 border border-white/20">
+<span class="material-symbols-outlined text-on-secondary-container mr-1" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+<span class="font-label-lg text-label-lg text-on-secondary-container drop-shadow-sm font-bold">1,250</span>
+</div>
+</div>
+</header>
+<!-- Map Area (Scrollable) -->
+<main class="w-full relative map-container" data-alt="A highly detailed, vibrant 3D cartoon-style map of magical floating islands. The landscape features lush green floating rocks, glowing purple crystal formations, and cascading waterfalls dropping into an indigo starry abyss. The lighting is bright and magical, emphasizing a premium casual mobile game aesthetic.">
+<!-- Curved Path SVG -->
+<svg class="absolute w-full h-full pointer-events-none opacity-40 z-0" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M 50,100 C 20,80 80,60 50,40 C 20,20 80,5 50,0" fill="none" stroke="#cfbdff" stroke-dasharray="2,2" stroke-width="2"></path>
+</svg>
+<!-- Level Nodes Container -->
+<div class="relative w-full h-full z-10 max-w-md mx-auto pt-24 pb-32">
+<!-- Level 1: Completed (Bottom) -->
+<div class="absolute bottom-[10%] left-[45%] transform -translate-x-1/2">
+<div class="flex flex-col items-center gap-1">
+<div class="flex justify-center gap-xs">
+<span class="material-symbols-outlined text-secondary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<button class="level-node-completed w-16 h-16 rounded-full flex items-center justify-center text-white font-headline-md text-headline-md-mobile border-2 border-white/40 transition-transform active:scale-95">
+                        1
+                    </button>
+</div>
+</div>
+<!-- Level 2: Completed -->
+<div class="absolute bottom-[25%] left-[25%] transform -translate-x-1/2">
+<div class="flex flex-col items-center gap-1">
+<div class="flex justify-center gap-xs">
+<span class="material-symbols-outlined text-secondary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-outline text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<button class="level-node-completed w-16 h-16 rounded-full flex items-center justify-center text-white font-headline-md text-headline-md-mobile border-2 border-white/40 transition-transform active:scale-95">
+                        2
+                    </button>
+</div>
+</div>
+<!-- Level 3: Active (Current Level) -->
+<div class="absolute bottom-[45%] left-[60%] transform -translate-x-1/2 z-20">
+<div class="flex flex-col items-center gap-2 floating">
+<!-- Current level indicator arrow -->
+<span class="material-symbols-outlined text-secondary-fixed-dim text-3xl animate-bounce drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" style="font-variation-settings: 'FILL' 1;">arrow_drop_down</span>
+<button class="level-node-active w-20 h-20 rounded-full flex items-center justify-center text-white font-headline-md text-headline-md-mobile border-4 border-white transition-transform active:scale-95">
+                        3
+                    </button>
+<!-- Small indicator label -->
+<div class="glass-panel px-3 py-1 rounded-full mt-2">
+<span class="font-label-sm text-label-sm text-primary-fixed">Current</span>
+</div>
+</div>
+</div>
+<!-- Level 4: Locked -->
+<div class="absolute bottom-[65%] left-[35%] transform -translate-x-1/2">
+<div class="flex flex-col items-center gap-1 opacity-80">
+<button class="level-node-locked w-16 h-16 rounded-full flex items-center justify-center text-on-surface-variant font-headline-md text-headline-md-mobile border-2 border-outline-variant transition-transform active:scale-95 cursor-not-allowed">
+<span class="material-symbols-outlined">lock</span>
+</button>
+</div>
+</div>
+<!-- Level 5: Locked Boss Level -->
+<div class="absolute bottom-[85%] left-[50%] transform -translate-x-1/2">
+<div class="flex flex-col items-center gap-2 opacity-80">
+<div class="glass-panel px-3 py-1 rounded-lg flex items-center gap-1">
+<span class="material-symbols-outlined text-error text-sm">skull</span>
+<span class="font-label-sm text-label-sm text-error">Boss</span>
+</div>
+<button class="level-node-locked w-20 h-20 rounded-xl flex items-center justify-center text-on-surface-variant font-headline-md text-headline-md-mobile border-2 border-error/50 transition-transform active:scale-95 cursor-not-allowed">
+<span class="material-symbols-outlined text-3xl">lock</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full rounded-t-lg pb-safe border-t border-white/20 shadow-[0_-4px_20px_rgba(0,0,0,0.4)] flex justify-around items-center h-20 z-50 px-margin-mobile bg-surface-container/60 dark:bg-surface-container/60 backdrop-blur-xl md:hidden">
+<!-- Map (Active) -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl p-2 shadow-[0_0_15px_rgba(207,189,255,0.5)] transform scale-110 duration-200 ease-out" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">map</span>
+<span class="font-label-sm text-label-sm mt-1">Map</span>
+</a>
+<!-- Quests -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 p-2 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">workspace_premium</span>
+<span class="font-label-sm text-label-sm mt-1">Quests</span>
+</a>
+<!-- Play (Hero Action) -->
+<div class="relative -top-6">
+<button class="w-16 h-16 rounded-full bg-gradient-to-b from-tertiary to-tertiary-container shadow-[0_4px_0_#003918,0_0_20px_rgba(0,228,117,0.5)] flex items-center justify-center border-2 border-white/50 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-tertiary text-4xl" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</button>
+</div>
+<!-- Inventory -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 p-2 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-sm text-label-sm mt-1">Items</span>
+</a>
+<!-- Settings -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 p-2 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm mt-1">Menu</span>
+</a>
+</nav>
+<script>
+        // Auto-scroll to active level on load for a better UX
+        document.addEventListener("DOMContentLoaded", () => {
+            const activeLevel = document.querySelector('.level-node-active');
+            if (activeLevel) {
+                // Scroll to position active level roughly in center view
+                activeLevel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    </script>
+</body></html>

@@ -1,43 +1,55 @@
-# game/scenes/main_menu.py - Premium Main Menu Screen with drifting bubble particles
+# game/scenes/main_menu.py - Stitch-accurate Main Menu with TopAppBar, Circular Hero Play Button, Bento Cards, and BottomNav Dock
 
 import pygame
 import math
-import random
+import time
 from game.scenes.base import BaseScene
 from game.core.config import GameConfig
 from game.ui.widgets import Label, Button
+from game.ui.design_system import (draw_gradient_bg, draw_glass_panel, draw_currency_chip,
+                                    draw_3d_button, create_ambient_bubbles, update_ambient_bubbles,
+                                    draw_ambient_bubbles)
 from game.audio.audio_manager import AudioManager
+from game.storage.save_manager import SaveManager
+
 
 class MainMenuScene(BaseScene):
     _has_checked_daily = False
 
     def __init__(self, manager):
         super().__init__(manager)
-        
-        # Centralized Title setup
-        self.title_label = Label("BUBBLE", size=48, title=True, color=GameConfig.COLOR_PRIMARY)
-        self.subtitle_label = Label("SHOOTER", size=42, title=True, color=(255, 255, 255))
-        
-        # Interactive Navigation Buttons
-        self.play_btn = Button("▶ PLAY", w=220, h=54, bg_color=GameConfig.COLOR_PRIMARY)
-        self.levels_btn = Button("📋 LEVEL SELECT", w=200, h=40, font_size=14)
-        self.settings_btn = Button("⚙️ SETTINGS", w=200, h=40, font_size=14)
-        self.shop_btn = Button("🛒 SHOP", w=200, h=40, font_size=14)
-        self.achieve_btn = Button("🏆 ACHIEVEMENTS", w=200, h=40, font_size=14)
-        self.profile_btn = Button("👤 PROFILE", w=200, h=40, font_size=14)
-        self.how_to_btn = Button("❓ HOW TO PLAY", w=200, h=40, font_size=14)
+
+        # Profile / progress data
+        self.profile = SaveManager.get_profile()
+        self.unlocked_level = self.profile.get("unlocked_level", 1)
+        self.coins = SaveManager.get_coins()
+        _, self.high_score, stars_data = SaveManager.get_progress()
+        self.total_stars = sum(stars_data.values()) if stars_data else 0
 
         # Ambient floating bubbles background
-        self.ambient_bubbles = []
-        for _ in range(8):
-            self.ambient_bubbles.append({
-                "vx": random.randint(30, GameConfig.VIRTUAL_WIDTH - 30),
-                "vy": random.randint(50, GameConfig.VIRTUAL_HEIGHT - 50),
-                "r": random.randint(10, 22),
-                "color": random.choice(GameConfig.BUBBLE_COLORS),
-                "phase": random.uniform(0, math.pi * 2),
-                "speed": random.uniform(0.5, 1.2)
-            })
+        self.bubbles = create_ambient_bubbles(10)
+        self._bg_surface = None
+        self.start_time = time.time()
+
+        # Hero Circular Play button
+        self.play_btn = Button("▶\nPLAY", w=160, h=160,
+                               bg_color=GameConfig.COLOR_PRIMARY, hero=True, font_size=24)
+
+        # Bento Quick Access Buttons
+        self.daily_btn = Button("🎁\nDaily Rewards", w=150, h=74, font_size=12,
+                                bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        self.achieve_btn = Button("🏆\nTrophy Road", w=150, h=74, font_size=12,
+                                  bg_color=GameConfig.COLOR_SURFACE_HIGH)
+
+        # Bottom Dock Icons
+        self.map_nav_btn = Button("🗺️", w=54, h=48, font_size=18, bg_color=GameConfig.COLOR_PRIMARY)
+        self.shop_nav_btn = Button("🛒", w=54, h=48, font_size=18, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        self.profile_nav_btn = Button("👤", w=54, h=48, font_size=18, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        self.stats_nav_btn = Button("📊", w=54, h=48, font_size=18, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        self.settings_nav_btn = Button("⚙️", w=54, h=48, font_size=18, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+
+        # Top profile header hit area
+        self.profile_header_btn = Button("", w=160, h=44, bg_color=GameConfig.COLOR_BG)
 
         # Start soundtrack
         AudioManager.play_music('Goofy_Theme.ogg')
@@ -48,73 +60,123 @@ class MainMenuScene(BaseScene):
             from datetime import datetime
             today_str = datetime.now().strftime("%Y-%m-%d")
             if SaveManager.get_last_claim_date() != today_str:
-                # Redirect to DailyRewards calendar
                 self.manager.change_scene("DailyRewards")
 
     def handle_event(self, event):
-        # 1. Back button exit handling
         if event.type == pygame.KEYDOWN:
             if event.key in [pygame.K_ESCAPE, pygame.K_AC_BACK]:
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
+                return
 
-        # 2. Touch/click checks on active buttons
-        if self.play_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 280):
-            self.manager.change_scene("LevelSelect")
-        elif self.levels_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 350):
-            self.manager.change_scene("LevelSelect")
-        elif self.settings_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 410):
-            self.manager.change_scene("Settings")
-        elif self.shop_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 470):
-            self.manager.change_scene("Shop")
-        elif self.achieve_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 530):
-            self.manager.change_scene("Achievements")
-        elif self.profile_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 590):
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        elapsed = time.time() - self.start_time
+        float_y = 330 + math.sin(elapsed * 2.0) * 8
+
+        # Top profile header click
+        if self.profile_header_btn.handle_event(event, 90, 32):
             self.manager.change_scene("Profile")
-        elif self.how_to_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 650):
-            self.manager.change_scene("HowToPlay")
+            return
+
+        # Hero Play button
+        if self.play_btn.handle_event(event, cx, float_y):
+            self.manager.change_scene("LevelSelect")
+            return
+
+        # Bento cards
+        if self.daily_btn.handle_event(event, cx - 85, 485):
+            self.manager.change_scene("DailyRewards")
+            return
+        elif self.achieve_btn.handle_event(event, cx + 85, 485):
+            self.manager.change_scene("Achievements")
+            return
+
+        # Bottom Dock Icons
+        dock_y = GameConfig.VIRTUAL_HEIGHT - 42
+        if self.map_nav_btn.handle_event(event, cx - 140, dock_y):
+            self.manager.change_scene("LevelSelect")
+        elif self.shop_nav_btn.handle_event(event, cx - 70, dock_y):
+            self.manager.change_scene("Shop")
+        elif self.profile_nav_btn.handle_event(event, cx, dock_y):
+            self.manager.change_scene("Profile")
+        elif self.stats_nav_btn.handle_event(event, cx + 70, dock_y):
+            self.manager.change_scene("Statistics")
+        elif self.settings_nav_btn.handle_event(event, cx + 140, dock_y):
+            self.manager.change_scene("Settings")
 
     def update(self, dt):
-        # Gentle floating background animation
-        for b in self.ambient_bubbles:
-            b["phase"] += dt * b["speed"]
-            b["vy"] -= b["speed"] * 10 * dt
-            # Wraparound screen edges
-            if b["vy"] < -b["r"]:
-                b["vy"] = GameConfig.VIRTUAL_HEIGHT + b["r"]
-                b["vx"] = random.randint(30, GameConfig.VIRTUAL_WIDTH - 30)
+        update_ambient_bubbles(self.bubbles, dt)
 
     def draw(self, surface):
-        # Draw background base
-        surface.fill(GameConfig.COLOR_BG)
+        # Gradient background (cached)
+        if self._bg_surface is None or self._bg_surface.get_size() != surface.get_size():
+            self._bg_surface = surface.copy()
+            draw_gradient_bg(self._bg_surface, top_color=(42, 27, 77),
+                             bot_color=(15, 13, 23), radial=True)
+        surface.blit(self._bg_surface, (0, 0))
 
-        # Draw ambient drift bubbles
-        for b in self.ambient_bubbles:
-            sx = GameConfig.to_screen_x(b["vx"] + math.sin(b["phase"]) * 15)
-            sy = GameConfig.to_screen_y(b["vy"])
-            srad = int(b["r"] * min(GameConfig.scale_x, GameConfig.scale_y))
-            if srad > 0:
-                # Transparent surface for alpha blending
-                surf = pygame.Surface((srad * 2, srad * 2), pygame.SRCALPHA)
-                pygame.draw.circle(surf, (*b["color"], 30), (srad, srad), srad)
-                surface.blit(surf, (sx - srad, sy - srad))
+        # Ambient floating bubbles
+        draw_ambient_bubbles(surface, self.bubbles)
 
-        # Title bounce glow pulse
-        pulse = math.sin(time.time() * 3) * 3
-        self.title_label.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 120 + pulse)
-        self.subtitle_label.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 175 + pulse)
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        elapsed = time.time() - self.start_time
 
-        # Render active buttons
-        self.play_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 280)
-        self.levels_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 350)
-        self.settings_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 410)
-        self.shop_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 470)
-        self.achieve_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 530)
-        self.profile_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 590)
-        self.how_to_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 650)
-        
-        # High Score watermark at bottom
-        _, high_score, _ = SaveManager.get_progress()
-        Label(f"HIGH SCORE: {high_score}", size=13, color=GameConfig.COLOR_TEXT_MUTED).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 28
+        # ─── 1. TOP APP BAR (Stitch header) ───
+        topbar_h = int(64 * GameConfig.scale_y)
+        topbar_rect = pygame.Rect(0, 0, GameConfig.actual_width, topbar_h)
+        draw_glass_panel(surface, topbar_rect, opacity=180, radius=0)
+
+        # Left: Avatar + Title + Level
+        Label("👤", size=24).draw(surface, 28, 30)
+        Label("Bubble Quest", size=15, title=True, align="left",
+              color=GameConfig.COLOR_PRIMARY_LIGHT).draw(surface, 52, 22, originX=0)
+        Label(f"Lvl {self.unlocked_level}", size=11, color=GameConfig.COLOR_GOLD, align="left").draw(
+            surface, 52, 42, originX=0
         )
-import time
+
+        # Right: Currency Chips
+        draw_currency_chip(surface, GameConfig.VIRTUAL_WIDTH - 145, 32, "🪙", self.coins)
+        draw_currency_chip(surface, GameConfig.VIRTUAL_WIDTH - 48, 32, "⭐", self.total_stars)
+
+        # ─── 2. CENTER HERO PLAY BUTTON (Floating Circular 3D Button) ───
+        float_offset = math.sin(elapsed * 2.0) * 8
+        hero_cy = 310 + float_offset
+
+        # Pulsing outer glow aura
+        pulse = 0.5 + 0.5 * math.sin(elapsed * 3.0)
+        aura_rad = int((85 + 15 * pulse) * min(GameConfig.scale_x, GameConfig.scale_y))
+        aura_sx = GameConfig.to_screen_x(cx)
+        aura_sy = GameConfig.to_screen_y(hero_cy)
+        aura_surf = pygame.Surface((aura_rad * 2, aura_rad * 2), pygame.SRCALPHA)
+        pygame.draw.circle(aura_surf, (*GameConfig.COLOR_PRIMARY_LIGHT[:3], int(25 + 30 * pulse)),
+                           (aura_rad, aura_rad), aura_rad)
+        surface.blit(aura_surf, (aura_sx - aura_rad, aura_sy - aura_rad))
+
+        # Circular Hero Play Button
+        btn_rad = int(72 * min(GameConfig.scale_x, GameConfig.scale_y))
+        hero_btn_rect = pygame.Rect(aura_sx - btn_rad, aura_sy - btn_rad, btn_rad * 2, btn_rad * 2)
+        draw_3d_button(surface, hero_btn_rect, GameConfig.COLOR_PRIMARY, glow=True, radius=btn_rad)
+
+        # Big Play Arrow Icon & Text inside hero button
+        Label("▶", size=36, color=(255, 255, 255), title=True).draw(surface, cx, hero_cy - 12)
+        Label("PLAY", size=18, color=(255, 255, 255), title=True, glow=True).draw(surface, cx, hero_cy + 24)
+
+        # ─── 3. BENTO QUICK ACCESS CARDS ───
+        bento_y = 485
+        self.daily_btn.draw(surface, cx - 85, bento_y)
+        self.achieve_btn.draw(surface, cx + 85, bento_y)
+
+        # High score watermark
+        Label(f"BEST SCORE: {self.high_score}", size=11,
+              color=GameConfig.COLOR_TEXT_MUTED).draw(surface, cx, 555)
+
+        # ─── 4. BOTTOM NAVIGATION DOCK (Frosted Glass) ───
+        dock_h = int(76 * GameConfig.scale_y)
+        dock_rect = pygame.Rect(0, GameConfig.actual_height - dock_h, GameConfig.actual_width, dock_h)
+        draw_glass_panel(surface, dock_rect, opacity=200, radius=int(24 * min(GameConfig.scale_x, GameConfig.scale_y)))
+
+        dock_y = GameConfig.VIRTUAL_HEIGHT - 42
+        self.map_nav_btn.draw(surface, cx - 140, dock_y)
+        self.shop_nav_btn.draw(surface, cx - 70, dock_y)
+        self.profile_nav_btn.draw(surface, cx, dock_y)
+        self.stats_nav_btn.draw(surface, cx + 70, dock_y)
+        self.settings_nav_btn.draw(surface, cx + 140, dock_y)

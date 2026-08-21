@@ -1,19 +1,22 @@
-# game/scenes/overlays.py - Pause, Victory, and Defeat screen overlays
+# game/scenes/overlays.py - Premium Pause, Victory, and Defeat screen overlays with glassmorphism
 
 import pygame
 import math
 import time
 from game.core.config import GameConfig
 from game.ui.widgets import Label, Button
+from game.ui.design_system import draw_glass_panel, draw_stars
 from game.audio.audio_manager import AudioManager
+from game.effects.particles import ParticleSystem
+
 
 class PauseOverlay:
     def __init__(self, scene):
         self.scene = scene
-        self.resume_btn = Button("▶ RESUME", w=180, h=44, bg_color=GameConfig.COLOR_SUCCESS)
-        self.restart_btn = Button("🔄 RESTART", w=180, h=44, bg_color=GameConfig.COLOR_PRIMARY)
-        self.select_btn = Button("📋 LEVEL SELECT", w=180, h=44)
-        self.menu_btn = Button("🏠 MAIN MENU", w=180, h=44, bg_color=GameConfig.COLOR_BG_LIGHT)
+        self.resume_btn = Button("▶  RESUME", w=220, h=48, bg_color=GameConfig.COLOR_SUCCESS, hero=True)
+        self.restart_btn = Button("🔄  RESTART", w=220, h=44, bg_color=GameConfig.COLOR_PRIMARY)
+        self.select_btn = Button("🗺️  LEVEL SELECT", w=220, h=44, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        self.menu_btn = Button("🏠  MAIN MENU", w=220, h=44, bg_color=GameConfig.COLOR_SURFACE_HIGH)
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -21,30 +24,43 @@ class PauseOverlay:
                 self.scene.show_pause = False
                 return True
 
-        if self.resume_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 280):
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        if self.resume_btn.handle_event(event, cx, 300):
             self.scene.show_pause = False
-        elif self.restart_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 340):
+        elif self.restart_btn.handle_event(event, cx, 365):
             self.scene.restart_level()
-        elif self.select_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 400):
+        elif self.select_btn.handle_event(event, cx, 430):
             self.scene.manager.change_scene("LevelSelect")
-        elif self.menu_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 460):
+        elif self.menu_btn.handle_event(event, cx, 495):
             self.scene.manager.change_scene("MainMenu")
         return True
 
     def draw(self, surface):
-        # Draw dark tint overlay
+        # Dark overlay
         sc = pygame.Surface((GameConfig.actual_width, GameConfig.actual_height), pygame.SRCALPHA)
-        sc.fill((10, 8, 20, 200))
+        sc.fill((10, 8, 20, 210))
         surface.blit(sc, (0, 0))
 
-        # Pause Title
-        Label("PAUSED", size=32, title=True, shadow=True).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 180)
+        cx = GameConfig.VIRTUAL_WIDTH / 2
 
-        # Draw buttons
-        self.resume_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 280)
-        self.restart_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 340)
-        self.select_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 400)
-        self.menu_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 460)
+        # Glass dialog panel
+        panel_w = int(300 * GameConfig.scale_x)
+        panel_h = int(350 * GameConfig.scale_y)
+        panel_x = GameConfig.to_screen_x(cx) - panel_w // 2
+        panel_y = GameConfig.to_screen_y(150)
+        draw_glass_panel(surface, pygame.Rect(panel_x, panel_y, panel_w, panel_h),
+                         opacity=140, radius=int(24 * min(GameConfig.scale_x, GameConfig.scale_y)),
+                         glow=True)
+
+        # Title
+        Label("⏸️  PAUSED", size=30, title=True, glow=True,
+              color=GameConfig.COLOR_PRIMARY_LIGHT).draw(surface, cx, 200)
+
+        # Buttons
+        self.resume_btn.draw(surface, cx, 300)
+        self.restart_btn.draw(surface, cx, 365)
+        self.select_btn.draw(surface, cx, 430)
+        self.menu_btn.draw(surface, cx, 495)
 
 
 class VictoryOverlay:
@@ -53,54 +69,73 @@ class VictoryOverlay:
         self.score = score
         self.stars = stars
         self.level_id = level_id
-        
-        # Audio & haptics check
-        AudioManager.play_sfx('victory')
-
-        self.next_btn = Button("▶ NEXT LEVEL", w=180, h=46, bg_color=GameConfig.COLOR_SUCCESS)
-        self.replay_btn = Button("🔄 REPLAY", w=180, h=44, bg_color=GameConfig.COLOR_PRIMARY)
-        self.select_btn = Button("📋 LEVEL SELECT", w=180, h=44)
         self.start_time = time.time()
 
+        AudioManager.play_sfx('victory')
+        ParticleSystem.create_confetti(count=35)
+
+        # Calculate coins earned (10 per star + score bonus)
+        self.coins_earned = stars * 10 + score // 100
+
+        self.next_btn = Button("▶  NEXT LEVEL", w=220, h=50,
+                               bg_color=GameConfig.COLOR_SUCCESS, hero=True)
+        self.replay_btn = Button("🔄  REPLAY", w=220, h=44,
+                                 bg_color=GameConfig.COLOR_PRIMARY)
+        self.select_btn = Button("🗺️  MAP", w=220, h=44,
+                                 bg_color=GameConfig.COLOR_SURFACE_HIGH)
+
     def handle_event(self, event):
-        if self.next_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 380):
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        if self.next_btn.handle_event(event, cx, 430):
             next_lvl = min(self.level_id + 1, 3000)
             self.scene.manager.change_scene("Gameplay", level_id=next_lvl)
-        elif self.replay_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 440):
+        elif self.replay_btn.handle_event(event, cx, 495):
             self.scene.restart_level()
-        elif self.select_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 500):
+        elif self.select_btn.handle_event(event, cx, 560):
             next_lvl = min(self.level_id + 1, 3000)
             self.scene.manager.change_scene("LevelSelect", newly_unlocked=next_lvl)
         return True
 
     def draw(self, surface):
+        # Dark overlay
         sc = pygame.Surface((GameConfig.actual_width, GameConfig.actual_height), pygame.SRCALPHA)
-        sc.fill((10, 8, 20, 225))
+        sc.fill((10, 8, 20, 230))
         surface.blit(sc, (0, 0))
 
-        # Title completes
-        Label("LEVEL COMPLETE!", size=30, title=True, color=GameConfig.COLOR_SUCCESS, shadow=True).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, 140
-        )
-        Label(f"Score: {self.score}", size=20, title=True, color=(255, 235, 59)).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, 200
-        )
+        cx = GameConfig.VIRTUAL_WIDTH / 2
 
-        # Star counts individually animated (fade/scale depending on time elapsed)
-        t_elapsed = time.time() - self.start_time
-        for i in range(3):
-            # Staggered animation entrance: 0.2s delay between stars
-            target_time = 0.3 + i * 0.25
-            if t_elapsed >= target_time:
-                star_char = "⭐" if i < self.stars else "☆"
-                star_color = (255, 235, 59) if i < self.stars else (80, 80, 100)
-                Label(star_char, size=38, color=star_color).draw(
-                    surface, GameConfig.VIRTUAL_WIDTH / 2 - 50 + i * 50, 260
-                )
+        # Glass dialog panel
+        panel_w = int(320 * GameConfig.scale_x)
+        panel_h = int(420 * GameConfig.scale_y)
+        panel_x = GameConfig.to_screen_x(cx) - panel_w // 2
+        panel_y = GameConfig.to_screen_y(100)
+        draw_glass_panel(surface, pygame.Rect(panel_x, panel_y, panel_w, panel_h),
+                         opacity=150, radius=int(24 * min(GameConfig.scale_x, GameConfig.scale_y)),
+                         glow=True)
 
-        self.next_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 380)
-        self.replay_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 440)
-        self.select_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 500)
+        # "LEVEL COMPLETE!" with gradient glow
+        Label("✨ LEVEL COMPLETE! ✨", size=26, title=True,
+              color=GameConfig.COLOR_SUCCESS, glow=True).draw(surface, cx, 150)
+
+        # Score display
+        Label(f"Score: {self.score}", size=22, title=True,
+              color=GameConfig.COLOR_GOLD).draw(surface, cx, 210)
+
+        # Coins earned badge
+        Label(f"🪙 +{self.coins_earned} coins", size=15,
+              color=GameConfig.COLOR_SECONDARY_CONTAINER).draw(surface, cx, 250)
+
+        # Stars with staggered animation
+        draw_stars(surface, cx, 310, self.stars, total=3, size=22,
+                   animated=True, start_time=self.start_time)
+
+        # Confetti particles
+        ParticleSystem.draw(surface)
+
+        # Buttons
+        self.next_btn.draw(surface, cx, 430)
+        self.replay_btn.draw(surface, cx, 495)
+        self.select_btn.draw(surface, cx, 560)
 
 
 class DefeatOverlay:
@@ -109,38 +144,52 @@ class DefeatOverlay:
         self.score = score
         self.level_id = level_id
 
-        # Audio check
         AudioManager.play_sfx('failure')
 
-        self.retry_btn = Button("🔄 TRY AGAIN", w=180, h=46, bg_color=GameConfig.COLOR_FAILURE)
-        self.select_btn = Button("📋 LEVEL SELECT", w=180, h=44)
-        self.menu_btn = Button("🏠 MAIN MENU", w=180, h=44, bg_color=GameConfig.COLOR_BG_LIGHT)
+        self.retry_btn = Button("🔄  TRY AGAIN", w=220, h=50,
+                                bg_color=GameConfig.COLOR_FAILURE, hero=True)
+        self.select_btn = Button("🗺️  MAP", w=220, h=44,
+                                 bg_color=GameConfig.COLOR_SURFACE_HIGH)
+        self.menu_btn = Button("🏠  MAIN MENU", w=220, h=44,
+                               bg_color=GameConfig.COLOR_SURFACE_HIGH)
 
     def handle_event(self, event):
-        if self.retry_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 360):
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        if self.retry_btn.handle_event(event, cx, 380):
             self.scene.restart_level()
-        elif self.select_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 420):
+        elif self.select_btn.handle_event(event, cx, 445):
             self.scene.manager.change_scene("LevelSelect")
-        elif self.menu_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 480):
+        elif self.menu_btn.handle_event(event, cx, 510):
             self.scene.manager.change_scene("MainMenu")
         return True
 
     def draw(self, surface):
+        # Dark overlay
         sc = pygame.Surface((GameConfig.actual_width, GameConfig.actual_height), pygame.SRCALPHA)
-        sc.fill((10, 8, 20, 225))
+        sc.fill((10, 8, 20, 230))
         surface.blit(sc, (0, 0))
 
-        Label("LEVEL FAILED", size=32, title=True, color=GameConfig.COLOR_FAILURE, shadow=True).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, 160
-        )
-        Label(f"Score: {self.score}", size=18, color=GameConfig.COLOR_TEXT_MUTED).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, 220
-        )
-        Label("Don't give up! Try again!", size=14, color=(140, 140, 160)).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, 255
-        )
+        cx = GameConfig.VIRTUAL_WIDTH / 2
 
-        self.retry_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 360)
-        self.select_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 420)
-        self.menu_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 480)
-import time
+        # Glass dialog panel
+        panel_w = int(300 * GameConfig.scale_x)
+        panel_h = int(350 * GameConfig.scale_y)
+        panel_x = GameConfig.to_screen_x(cx) - panel_w // 2
+        panel_y = GameConfig.to_screen_y(120)
+        draw_glass_panel(surface, pygame.Rect(panel_x, panel_y, panel_w, panel_h),
+                         opacity=150, radius=int(24 * min(GameConfig.scale_x, GameConfig.scale_y)),
+                         border_color=GameConfig.COLOR_FAILURE)
+
+        # Title with red glow
+        Label("LEVEL FAILED", size=30, title=True,
+              color=GameConfig.COLOR_FAILURE, glow=True).draw(surface, cx, 180)
+
+        Label(f"Score: {self.score}", size=18,
+              color=GameConfig.COLOR_TEXT_MUTED).draw(surface, cx, 240)
+        Label("Don't give up! Try again!", size=14,
+              color=GameConfig.COLOR_OUTLINE).draw(surface, cx, 280)
+
+        # Buttons
+        self.retry_btn.draw(surface, cx, 380)
+        self.select_btn.draw(surface, cx, 445)
+        self.menu_btn.draw(surface, cx, 510)

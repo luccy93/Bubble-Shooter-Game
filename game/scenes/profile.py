@@ -1,36 +1,36 @@
-# game/scenes/profile.py - User Profile and Stats viewer screen
+# game/scenes/profile.py - Premium User Profile with glassmorphism cards and real data
 
 import pygame
 from game.scenes.base import BaseScene
 from game.core.config import GameConfig
 from game.ui.widgets import Label, Button
+from game.ui.design_system import draw_gradient_bg, draw_glass_panel
 from game.storage.save_manager import SaveManager
 from game.auth.session_manager import SessionManager
+
 
 class ProfileScene(BaseScene):
     def __init__(self, manager):
         super().__init__(manager)
-        
+
         self.active_user = SaveManager.get_active_user()
         self.profile = SaveManager.get_profile()
         self.stats = self.profile["stats"]
-        
-        # Determine guest status
         self.is_guest = (self.active_user == "guest")
 
-        # Action Buttons
-        self.back_btn = Button("← BACK", w=140, h=40, bg_color=GameConfig.COLOR_BG_LIGHT)
-        
+        self.back_btn = Button("← BACK", w=140, h=40, bg_color=GameConfig.COLOR_SURFACE_HIGH)
+
         if self.is_guest:
-            self.action_btn = Button("📝 CREATE ACCOUNT", w=220, h=46, bg_color=GameConfig.COLOR_SUCCESS)
+            self.action_btn = Button("📝 CREATE ACCOUNT", w=220, h=46,
+                                     bg_color=GameConfig.COLOR_SUCCESS, hero=True)
         else:
-            self.action_btn = Button("🔒 LOG OUT", w=200, h=44, bg_color=GameConfig.COLOR_FAILURE)
+            self.action_btn = Button("🔒 LOG OUT", w=200, h=44,
+                                     bg_color=GameConfig.COLOR_FAILURE)
 
         # Calculate stars
-        stars_count = 0
-        for val in self.profile.get("stars", {}).values():
-            stars_count += val
+        stars_count = sum(self.profile.get("stars", {}).values())
         self.stars_count = stars_count
+        self._bg_surface = None
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -38,13 +38,11 @@ class ProfileScene(BaseScene):
                 self.manager.change_scene("MainMenu")
                 return
 
-        # Back navigation click
         if self.back_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 60):
             self.manager.change_scene("MainMenu")
             return
 
-        # Action click
-        if self.action_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 490):
+        if self.action_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, 510):
             if self.is_guest:
                 self.manager.change_scene("SignUp")
             else:
@@ -55,34 +53,35 @@ class ProfileScene(BaseScene):
         pass
 
     def draw(self, surface):
-        surface.fill(GameConfig.COLOR_BG)
-        Label("USER PROFILE", size=24, title=True).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 60)
+        if self._bg_surface is None or self._bg_surface.get_size() != surface.get_size():
+            self._bg_surface = surface.copy()
+            draw_gradient_bg(self._bg_surface, top_color=(35, 22, 65), bot_color=(15, 13, 23))
+        surface.blit(self._bg_surface, (0, 0))
 
-        # Avatar card box layout
-        cy = 150
-        scx = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2)
-        scy = GameConfig.to_screen_y(cy)
-        sw = int(350 * GameConfig.scale_x)
-        sh = int(100 * GameConfig.scale_y)
-        avatar_rect = pygame.Rect(scx - sw // 2, scy - sh // 2, sw, sh)
-        pygame.draw.rect(surface, GameConfig.COLOR_BG_LIGHT, avatar_rect, border_radius=12)
-        pygame.draw.rect(surface, GameConfig.COLOR_ACCENT, avatar_rect, width=1, border_radius=12)
+        cx = GameConfig.VIRTUAL_WIDTH / 2
+        Label("USER PROFILE", size=24, title=True, glow=True,
+              color=GameConfig.COLOR_PRIMARY_LIGHT).draw(surface, cx, 60)
 
-        # Avatar profile symbol (e.g. Emoji)
+        # Avatar card with glassmorphism
+        card_w = int(350 * GameConfig.scale_x)
+        card_h = int(100 * GameConfig.scale_y)
+        card_x = GameConfig.to_screen_x(cx) - card_w // 2
+        card_y = GameConfig.to_screen_y(150) - card_h // 2
+        draw_glass_panel(surface, pygame.Rect(card_x, card_y, card_w, card_h),
+                         opacity=100, radius=int(16 * min(GameConfig.scale_x, GameConfig.scale_y)),
+                         border_color=GameConfig.COLOR_PRIMARY)
+
+        # Avatar symbol
         avatar_symbol = "👤" if not self.is_guest else "🎮"
-        Label(avatar_symbol, size=32).draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 120, cy)
+        Label(avatar_symbol, size=32).draw(surface, cx - 120, 150)
 
-        # Profile headers
         usr_title = self.profile["name"]
         usr_sub = self.active_user if not self.is_guest else "Playing locally as Guest"
-        Label(usr_title, size=18, title=True, align="left").draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2 - 70, cy - 15, originX=0
-        )
+        Label(usr_title, size=18, title=True, align="left").draw(surface, cx - 70, 135, originX=0)
         Label(usr_sub, size=12, color=GameConfig.COLOR_TEXT_MUTED, align="left").draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2 - 70, cy + 15, originX=0
-        )
+            surface, cx - 70, 165, originX=0)
 
-        # Display performance stats indicators
+        # Stats rows with glass cards
         entries = [
             ("Levels Cleared", f"{self.stats['levels_completed']} / 15"),
             ("Total Stars", f"{self.stars_count} / 45"),
@@ -91,27 +90,23 @@ class ProfileScene(BaseScene):
         ]
 
         for i, (label, val) in enumerate(entries):
-            ry = 265 + i * 50
-            scx = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2)
-            scy = GameConfig.to_screen_y(ry)
-            sw = int(350 * GameConfig.scale_x)
-            sh = int(38 * GameConfig.scale_y)
-            row_rect = pygame.Rect(scx - sw // 2, scy - sh // 2, sw, sh)
-            pygame.draw.rect(surface, GameConfig.COLOR_BG_LIGHT, row_rect, border_radius=8)
+            ry = 265 + i * 55
+            row_w = int(350 * GameConfig.scale_x)
+            row_h = int(42 * GameConfig.scale_y)
+            row_x = GameConfig.to_screen_x(cx) - row_w // 2
+            row_y = GameConfig.to_screen_y(ry) - row_h // 2
+            draw_glass_panel(surface, pygame.Rect(row_x, row_y, row_w, row_h),
+                             opacity=70, radius=10)
 
             Label(label, size=14, color=GameConfig.COLOR_TEXT_MUTED, align="left").draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2 - 145, ry, originX=0
-            )
-            Label(str(val), size=15, color=GameConfig.COLOR_PRIMARY, title=True).draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2 + 130, ry, originX=1
-            )
+                surface, cx - 145, ry, originX=0)
+            Label(str(val), size=15, color=GameConfig.COLOR_PRIMARY_LIGHT, title=True).draw(
+                surface, cx + 130, ry, originX=1)
 
-        # Sign Up prompts if Guest
+        # Sign up prompt for guests
         if self.is_guest:
-            Label("Sign up to save progress across sessions!", size=11, color=GameConfig.COLOR_PRIMARY).draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2, 448
-            )
+            Label("Sign up to save progress across sessions!", size=11,
+                  color=GameConfig.COLOR_PRIMARY_LIGHT).draw(surface, cx, 468)
 
-        # Action Buttons
-        self.action_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 490)
-        self.back_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 60)
+        self.action_btn.draw(surface, cx, 510)
+        self.back_btn.draw(surface, cx, GameConfig.VIRTUAL_HEIGHT - 60)

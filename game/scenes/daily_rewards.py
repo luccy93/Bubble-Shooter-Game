@@ -1,4 +1,4 @@
-# game/scenes/daily_rewards.py - Daily Reward Claim Calendar screen
+# game/scenes/daily_rewards.py - Daily Reward Claim Calendar screen with Stitch design
 
 import pygame
 import time
@@ -6,7 +6,9 @@ from datetime import datetime
 from game.scenes.base import BaseScene
 from game.core.config import GameConfig
 from game.ui.widgets import Label, Button
+from game.ui.design_system import draw_gradient_bg, draw_glass_panel
 from game.storage.save_manager import SaveManager
+from game.audio.audio_manager import AudioManager
 
 class DailyRewardsScene(BaseScene):
     def __init__(self, manager):
@@ -14,7 +16,6 @@ class DailyRewardsScene(BaseScene):
         
         # Load user profile streak index
         profile = SaveManager.get_profile()
-        # Default streak index to 0 if missing
         self.streak_idx = profile.setdefault("claim_streak_index", 0)
 
         # Rewards list
@@ -23,16 +24,17 @@ class DailyRewardsScene(BaseScene):
             {"desc": "1 Bomb", "icon": "💣", "coins": 0, "booster": "bomb"},
             {"desc": "100 Coins", "icon": "🪙", "coins": 100, "booster": None},
             {"desc": "1 Lightning", "icon": "⚡", "coins": 0, "booster": "lightning"},
-            {"desc": "Mega Chest!", "icon": "🎁", "coins": 150, "booster": "rainbow"} # Rainbow booster + 150 coins
+            {"desc": "Mega Chest!", "icon": "🎁", "coins": 150, "booster": "rainbow"}
         ]
 
-        self.claim_btn = Button("🎁 CLAIM REWARD", w=220, h=48, bg_color=GameConfig.COLOR_SUCCESS)
-        self.back_btn = Button("← BACK", w=120, h=36, bg_color=GameConfig.COLOR_BG_LIGHT)
+        self.claim_btn = Button("🎁 CLAIM REWARD", w=240, h=50, bg_color=GameConfig.COLOR_SUCCESS, hero=True)
+        self.back_btn = Button("← BACK", w=120, h=36, bg_color=GameConfig.COLOR_SURFACE_HIGH)
         
         # Check claim state
         today_str = datetime.now().strftime("%Y-%m-%d")
         self.already_claimed = (SaveManager.get_last_claim_date() == today_str)
         self.status_msg = "Claim your reward for today!" if not self.already_claimed else "Already claimed today! Come back tomorrow."
+        self._bg_surface = None
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -45,9 +47,10 @@ class DailyRewardsScene(BaseScene):
             self.manager.change_scene("MainMenu")
             return
 
+        cx = GameConfig.VIRTUAL_WIDTH / 2
         # Claim click
         if not self.already_claimed:
-            if self.claim_btn.handle_event(event, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 120):
+            if self.claim_btn.handle_event(event, cx, GameConfig.VIRTUAL_HEIGHT - 110):
                 self.process_claim()
 
     def process_claim(self):
@@ -59,7 +62,6 @@ class DailyRewardsScene(BaseScene):
             SaveManager.add_coins(r["coins"])
         if r["booster"]:
             SaveManager.add_booster(r["booster"], count=1)
-            # If Chest reward, also give 1 of other boosters!
             if r["desc"] == "Mega Chest!":
                 SaveManager.add_booster("bomb", count=1)
                 SaveManager.add_booster("lightning", count=1)
@@ -79,63 +81,70 @@ class DailyRewardsScene(BaseScene):
         self.already_claimed = True
         self.status_msg = "Claimed successfully! Streak progressed."
         
-        pygame.mixer.Sound(GameConfig.get_asset_path('audio', 'popcork.ogg')).play()
+        AudioManager.play_sfx('victory')
 
     def update(self, dt):
         pass
 
     def draw(self, surface):
-        surface.fill(GameConfig.COLOR_BG)
+        if self._bg_surface is None or self._bg_surface.get_size() != surface.get_size():
+            self._bg_surface = surface.copy()
+            draw_gradient_bg(self._bg_surface, top_color=(35, 22, 65), bot_color=(15, 13, 23))
+        surface.blit(self._bg_surface, (0, 0))
+
+        cx = GameConfig.VIRTUAL_WIDTH / 2
 
         # Header Title
-        Label("DAILY REWARDS", size=24, title=True).draw(surface, GameConfig.VIRTUAL_WIDTH / 2, 60)
-        Label(self.status_msg, size=13, color=GameConfig.COLOR_PRIMARY).draw(
-            surface, GameConfig.VIRTUAL_WIDTH / 2, 110
+        Label("DAILY REWARDS", size=24, title=True, glow=True,
+              color=GameConfig.COLOR_PRIMARY_LIGHT).draw(surface, cx, 60)
+        Label(self.status_msg, size=13, color=GameConfig.COLOR_GOLD).draw(
+            surface, cx, 105
         )
 
         # Draw Calendar cards for 5 days
         for i in range(5):
             r = self.rewards[i]
-            cy = 170 + i * 70
+            cy = 175 + i * 76
             
-            # Convert cards
-            scx = GameConfig.to_screen_x(GameConfig.VIRTUAL_WIDTH / 2)
-            scy = GameConfig.to_screen_y(cy)
-            sw = int(340 * GameConfig.scale_x)
-            sh = int(54 * GameConfig.scale_y)
-            card_rect = pygame.Rect(scx - sw // 2, scy - sh // 2, sw, sh)
+            card_w = int(360 * GameConfig.scale_x)
+            card_h = int(62 * GameConfig.scale_y)
+            card_x = GameConfig.to_screen_x(cx) - card_w // 2
+            card_y = GameConfig.to_screen_y(cy) - card_h // 2
+            card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
 
-            # Determine background coloring depending on active/claimed streak
             if i < self.streak_idx:
                 # Already claimed in the past
-                bg_color = (25, 35, 30)
                 border_color = GameConfig.COLOR_SUCCESS
                 tag = "CLAIMED"
+                tag_color = GameConfig.COLOR_SUCCESS
+                glow = False
             elif i == self.streak_idx and not self.already_claimed:
                 # Active today!
-                bg_color = (35, 25, 55)
-                border_color = GameConfig.COLOR_PRIMARY
+                border_color = GameConfig.COLOR_GOLD
                 tag = "TODAY"
+                tag_color = GameConfig.COLOR_GOLD
+                glow = True
             else:
                 # Locked future rewards
-                bg_color = GameConfig.COLOR_BG_LIGHT
-                border_color = (60, 50, 85)
+                border_color = GameConfig.COLOR_OUTLINE_DIM
                 tag = f"DAY {i+1}"
+                tag_color = GameConfig.COLOR_TEXT_MUTED
+                glow = False
 
-            pygame.draw.rect(surface, bg_color, card_rect, border_radius=10)
-            pygame.draw.rect(surface, border_color, card_rect, width=1, border_radius=10)
+            draw_glass_panel(surface, card_rect, opacity=90, border_color=border_color,
+                             radius=14, glow=glow)
 
             # Draw card descriptors
-            Label(tag, size=12, color=border_color, title=True, align="left").draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2 - 140, cy, originX=0
+            Label(tag, size=12, color=tag_color, title=True, align="left").draw(
+                surface, cx - 150, cy, originX=0
             )
-            Label(r["icon"], size=22).draw(surface, GameConfig.VIRTUAL_WIDTH / 2 - 40, cy)
-            Label(r["desc"], size=14, color=(255, 255, 255), align="left").draw(
-                surface, GameConfig.VIRTUAL_WIDTH / 2, cy, originX=0
+            Label(r["icon"], size=22).draw(surface, cx - 40, cy)
+            Label(r["desc"], size=14, color=GameConfig.COLOR_TEXT, align="left").draw(
+                surface, cx + 5, cy, originX=0
             )
 
         # Draw claim button
         if not self.already_claimed:
-            self.claim_btn.draw(surface, GameConfig.VIRTUAL_WIDTH / 2, GameConfig.VIRTUAL_HEIGHT - 120)
+            self.claim_btn.draw(surface, cx, GameConfig.VIRTUAL_HEIGHT - 110)
         
         self.back_btn.draw(surface, 80, 50)
