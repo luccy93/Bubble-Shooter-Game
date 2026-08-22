@@ -6,16 +6,26 @@
 </p>
 
 <p align="center">
+  <a href="https://bubble-shooter-game-tau.vercel.app/" target="_blank">
+    <img src="https://img.shields.io/badge/🎮%20PLAY%20LIVE%20DEMO-bubble--shooter--game--tau.vercel.app-00E475?style=for-the-badge&logo=vercel&logoColor=black" alt="Play Live Demo" height="38">
+  </a>
+</p>
+
+<p align="center">
+  👉 <strong><a href="https://bubble-shooter-game-tau.vercel.app/">https://bubble-shooter-game-tau.vercel.app/</a></strong> 👈
+</p>
+
+<p align="center">
   <img src="docs/images/banner.png" alt="Bubble Quest Banner" width="100%">
 </p>
 
 <p align="center">
+  <a href="https://bubble-shooter-game-tau.vercel.app/"><img src="https://img.shields.io/badge/Live%20Demo-Vercel%20Active-brightgreen?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo"></a>
   <img src="https://img.shields.io/badge/Python-3.7%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.7+">
   <img src="https://img.shields.io/badge/Engine-Pygame--CE%202.5%2B-green?style=for-the-badge&logo=pypi&logoColor=white" alt="Pygame-CE">
   <img src="https://img.shields.io/badge/Web-HTML5%20Canvas%20%7C%20Tailwind-E34F26?style=for-the-badge&logo=html5&logoColor=white" alt="HTML5 Web SPA">
   <img src="https://img.shields.io/badge/Platform-Desktop%20%7C%20Android%20%7C%20Web-blue?style=for-the-badge" alt="Platforms">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License MIT">
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge" alt="Status">
 </p>
 
 ---
@@ -360,11 +370,13 @@ buildozer android debug deploy run
 
 ## 🌐 Free Cloud Deployment
 
-### 1. Vercel Deployment
+### 1. Vercel Deployment (Live Production)
+👉 **Live URL**: **[https://bubble-shooter-game-tau.vercel.app/](https://bubble-shooter-game-tau.vercel.app/)**
+
 The repository includes [`vercel.json`](file:///c:/Users/Devendraprasad/Downloads/Python-Bubble-Shooter-game-main/vercel.json) pre-configured for `@vercel/static` zero-config builds:
 1. Push this repository to GitHub.
 2. Go to **[vercel.com/new](https://vercel.com/new)** and import your repository.
-3. Click **Deploy** — Vercel will deploy your live game in ~10 seconds!
+3. Vercel automatically deploys your game with zero configuration.
 
 ### 2. GitHub Pages Deployment
 The repository includes an automated GitHub Actions workflow at [`.github/workflows/deploy.yml`](file:///c:/Users/Devendraprasad/Downloads/Python-Bubble-Shooter-game-main/.github/workflows/deploy.yml):
