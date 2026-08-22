@@ -80,3 +80,10 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# Top-level exports for cloud / serverless environment compatibility (e.g. Vercel)
+def handler(request=None, response=None):
+    return "Bubble Shooter Game"
+
+app = handler
+application = handler

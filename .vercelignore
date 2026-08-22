@@ -1,0 +1,9 @@
+main.py
+game/
+tests/
+AndroidBubbleShooter/
+game_resources/
+buildozer.spec
+pyproject.toml
+requirements.txt
+save_data.json
